@@ -1,0 +1,42 @@
+# --- SECURE YOUR SECRETS (Fixes GitHub Block) ---
+.env
+assets/service-account.json
+# Ignore all JSON files in assets if you have multiple keys
+# assets/*.json 
+
+# --- FLUTTER & DART ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+# Specifically ignore heavy app binaries
+**/build/**
+*.ipa
+*.apk
+*.aab
+
+# --- ANDROID ---
+.gradle/
+local.properties
+*.jks
+*.keystore
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# --- IOS ---
+*.podspec
+.pfx
+*.pkcs12
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+/ios/Pods/
+
+# --- IDEs & OS ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
