@@ -6,17 +6,13 @@ import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/stage_blocks.dart';
 import 'package:flutter_application_1/widgets/status_indicator.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
-import 'dart:developer';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
-const storage = FlutterSecureStorage();
 
 class OwnershipTracking extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -128,12 +124,6 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
       isLoading = true;
     });
     try {
-      final token = await storage.read(key: 'token');
-
-      if (token == null) {
-        log('Token is null');
-        throw Exception('Token is null');
-      }
       final applicationDate = _dateController.text;
       final applicationNum = int.parse(_requestNoController.text);
       String url =
@@ -142,10 +132,25 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        if (!mounted) return;
+        final result = json.decode(response.body) as Map<String, dynamic>;
+
+        // A "4" progress colour with no details means the API accepted the
+        // request but found no matching ownership request.
+        final progColor = result['prog_color']?.toString() ?? '1';
+        final hasData = result['details'] != null ||
+            const ['1', '2', '3'].contains(progColor);
+
         setState(() {
-          _ownershipTransactionDetails = result;
-          _message = " ";
+          if (!hasData) {
+            _ownershipTransactionDetails = {};
+            _message = pageLang == 'A'
+                ? 'لا يوجد طلب بالمعلومات المُدخلة.'
+                : 'No request found for the entered details.';
+          } else {
+            _ownershipTransactionDetails = result;
+            _message = " ";
+          }
         });
       } else {
         if (mounted) {
@@ -163,9 +168,11 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
         );
       }
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -182,11 +189,22 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
   }
 
   String? _validation() {
-    if (_selectedRequestType == null) {
+    final bool isArabic =
+        Localizations.localeOf(context).languageCode == 'ar';
+
+    if (_selectedRequestType == null || _selectedBookNumber == null) {
       return S.of(context).requestTypeIsRequired;
     }
-    if (_selectedDate == null) {
+    if (_selectedDate == null || _dateController.text.trim().isEmpty) {
       return S.of(context).dateIsRequired;
+    }
+    if (_requestNoController.text.trim().isEmpty) {
+      return isArabic ? 'رقم الطلب مطلوب.' : 'Request number is required.';
+    }
+    if (int.tryParse(_requestNoController.text.trim()) == null) {
+      return isArabic
+          ? 'رقم الطلب يجب أن يكون رقماً صحيحاً.'
+          : 'Request number must be a valid number.';
     }
     return null; // No validation errors
   }
@@ -224,8 +242,8 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
     void onRequestTypeChanged(String? newValue) {
       setState(() {
         _selectedRequestType = newValue;
-        _selectedBookNumber = _requestType != null
-            ? _bookNumbers![_requestType!.indexOf(newValue!)]
+        _selectedBookNumber = (_requestType != null && newValue != null)
+            ? _bookNumbers![_requestType!.indexOf(newValue)]
             : null;
       });
     }
@@ -272,14 +290,18 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             S.of(context).requestType,
                             style: const TextStyle(fontSize: 12),
                           ),
-                          DropdownButton<String>(
+                          const SizedBox(height: 6.0),
+                          DropdownButtonFormField<String>(
                             hint: Text(S.of(context).requestType),
                             value: _selectedRequestType,
                             isExpanded: true,
                             items: _requestType?.map((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
-                                child: Text(value),
+                                child: Text(
+                                  value,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               );
                             }).toList(),
                             onChanged: onRequestTypeChanged,
@@ -289,6 +311,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             S.of(context).requestDate,
                             style: const TextStyle(fontSize: 12),
                           ),
+                          const SizedBox(height: 6.0),
                           TextField(
                             controller: _dateController,
                             readOnly: true,
@@ -302,6 +325,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             S.of(context).requestNo,
                             style: const TextStyle(fontSize: 12),
                           ),
+                          const SizedBox(height: 6.0),
                           TextField(
                             controller: _requestNoController,
                             keyboardType: TextInputType.number,
@@ -347,28 +371,47 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             ),
                             const SizedBox(height: 16.0),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                StageBlock(
+                                Expanded(
+                                  child: StageBlock(
                                     title: S.of(context).requestReceipt,
                                     colorCode: _ownershipTransactionDetails[
-                                            'RCP_color'] ??
-                                        '1'),
-                                StageBlock(
+                                                'RCP_color']
+                                            ?.toString() ??
+                                        '1',
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: StageBlock(
                                     title: S.of(context).ownershipQuery,
                                     colorCode: _ownershipTransactionDetails[
-                                            'OFF_color'] ??
-                                        '1'),
-                                StageBlock(
+                                                'OFF_color']
+                                            ?.toString() ??
+                                        '1',
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: StageBlock(
                                     title: S.of(context).requestApproval,
                                     colorCode: _ownershipTransactionDetails[
-                                            'APRV_color'] ??
-                                        '1'),
-                                StageBlock(
+                                                'APRV_color']
+                                            ?.toString() ??
+                                        '1',
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: StageBlock(
                                     title: S.of(context).requestCertication,
                                     colorCode: _ownershipTransactionDetails[
-                                            'CERT_color'] ??
-                                        '1'),
+                                                'CERT_color']
+                                            ?.toString() ??
+                                        '1',
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 16.0),

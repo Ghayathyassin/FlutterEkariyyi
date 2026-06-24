@@ -1,9 +1,9 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
-import 'package:flutter_application_1/models/paid_invoice_cache.dart';
 import 'package:flutter_application_1/models/province_cache.dart';
 import 'package:flutter_application_1/models/transaction_data.dart';
+import 'package:flutter_application_1/widgets/searchable_dropdown.dart';
 import 'package:flutter_application_1/widgets/custom_card_widget_column.dart';
 import 'package:flutter_application_1/widgets/custom_card_widget_row.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
@@ -49,6 +49,10 @@ class PaidInvoicesState extends State<PaidInvoices> {
       TextEditingController();
   final TextEditingController partyController = TextEditingController();
   List<String> provinces = [];
+  // Display-name -> name in each language, used to build bilingual search text
+  // (mirrors Title Register).
+  final Map<String, String> provinceAr = {};
+  final Map<String, String> provinceEn = {};
   final Map<String, List<Map<String, dynamic>>> cazaOptions = {};
   final Map<String, List<Map<String, dynamic>>> cadastralZoneOptions = {};
   String? validationMessage;
@@ -69,41 +73,33 @@ class PaidInvoicesState extends State<PaidInvoices> {
 
   Future<void> fetchProvinces() async {
     try {
-      List<dynamic>? cachedData = await paidInvoicesCache.cachedPaidInvoices;
-      DateTime? cacheTimestamp = await paidInvoicesCache.cacheTimestamp;
-
-      if (cachedData != null &&
-          cacheTimestamp != null &&
-          await paidInvoicesCache.isCacheValid) {
-        log('Cache hit: Using cached provinces');
-        setState(() {
-          processLocations(cachedData);
-        });
+      List<dynamic>? cachedData = await provinceCache.cachedProvinces;
+      DateTime? cacheTimestamp = await provinceCache.cacheTimestamp;
+      if (cachedData != null && cacheTimestamp != null) {
+        log('[paidInvoices] Cache hit: using cached provinces');
+        if (mounted) setState(() => processProvinces(cachedData));
         return;
       }
 
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/locations/');
+      // Same bilingual endpoint as Title Register (NOT the trailing-slash
+      // variant, which returns Arabic-only data with a different shape).
+      final url = Uri.parse('https://test-app.lrc.gov.lb/api/locations');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
-        Map<String, dynamic> data = json.decode(response.body);
-        List<dynamic>? locations = data['provinceData'];
-
+        final List<dynamic>? locations = json.decode(response.body);
         if (locations == null || locations.isEmpty) {
-          log('Locations data is null or empty');
+          log('[paidInvoices] Locations data is null or empty');
           return;
         }
-
-        // Save fetched data to cache
-        await paidInvoicesCache.setcachedPaidInvoices(locations);
-
-        setState(() {
-          processLocations(locations);
-        });
+        log('[paidInvoices] Fetched ${locations.length} provinces');
+        await provinceCache.setCachedProvinces(locations);
+        if (mounted) setState(() => processProvinces(locations));
       } else {
-        throw Exception('Failed to load provinces');
+        throw Exception('HTTP ${response.statusCode}');
       }
     } catch (e) {
+      log('[paidInvoices] fetchProvinces error: $e');
       if (mounted) {
         ErrorSnackbar.show(
           context: context,
@@ -113,123 +109,216 @@ class PaidInvoicesState extends State<PaidInvoices> {
     }
   }
 
-  void processLocations(List<dynamic> provinceData) {
-    List<String> updatedProvinces = [];
-    Map<String, List<Map<String, dynamic>>> updatedCazaOptions = {};
+  void processProvinces(List<dynamic> locations) {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
 
-    for (var province in provinceData) {
-      updatedProvinces.add(province['PROVINCE_NAME'] as String);
+    provinces.clear();
+    cazaOptions.clear();
+    provinceAr.clear();
+    provinceEn.clear();
 
-      List<Map<String, dynamic>> cazas =
-          province['Cazas'].map<Map<String, dynamic>>((caza) {
+    for (var location in locations) {
+      final pAr = location['Name'] as String;
+      final pEn = location['NameEnglish'] as String;
+      final pDisplay = isEnglish ? pEn : pAr;
+
+      provinces.add(pDisplay);
+      provinceAr[pDisplay] = pAr;
+      provinceEn[pDisplay] = pEn;
+
+      final cazas =
+          (location['Cazas'] as List).map<Map<String, dynamic>>((caza) {
+        final cAr = caza['Name'] as String;
+        final cEn = caza['NameEnglish'] as String;
         return {
-          'Name': caza['CAZA_NAME'] as String,
-          'Code': caza['CAZA_CODE'] as int,
-          'CadastralAreas':
-              caza['CadastralAreas'].map<Map<String, dynamic>>((area) {
+          'Name': isEnglish ? cEn : cAr,
+          'NameAr': cAr,
+          'NameEn': cEn,
+          'Code': caza['Code'],
+          'ProvinceCode': caza['ProviceCode'],
+          'CadastralAreas': (caza['CadastralAreas'] as List)
+              .map<Map<String, dynamic>>((area) {
+            final aAr = area['nameField'] as String;
+            final aEn = area['nameEnglishField'] as String;
             return {
-              'nameField': area['cADASTRAL_AREA_NAMEField'] as String,
-              'codeField': area['cADASTRAL_AREA_CODEField'] as int,
+              'nameField': isEnglish ? aEn : aAr,
+              'nameAr': aAr,
+              'nameEn': aEn,
+              'codeField': area['codeField'],
+              'provinceCodeField': area['provinceCodeField'],
+              'cazaCodeField': area['cazaCodeField'],
             };
           }).toList(),
         };
       }).toList();
-
-      updatedCazaOptions[province['PROVINCE_NAME'] as String] = cazas;
+      cazaOptions[pDisplay] = cazas;
     }
+  }
 
-    setState(() {
-      provinces = updatedProvinces;
-      cazaOptions.addAll(updatedCazaOptions);
-    });
+  // ---- Bilingual searchable item builders -------------------------------
+
+  List<SearchableItem> _provinceItems(bool isEnglish) {
+    return provinces.map((p) {
+      final ar = provinceAr[p] ?? p;
+      final en = provinceEn[p] ?? p;
+      return SearchableItem(
+        value: p,
+        searchText: normalizeSearch('$ar $en'),
+        subtitle: isEnglish ? ar : en,
+      );
+    }).toList();
+  }
+
+  List<SearchableItem> _cazaItems(String province, bool isEnglish) {
+    return cazaOptions[province]!.map((c) {
+      final ar = (c['NameAr'] ?? c['Name']) as String;
+      final en = (c['NameEn'] ?? c['Name']) as String;
+      return SearchableItem(
+        value: c['Name'] as String,
+        searchText: normalizeSearch('$ar $en'),
+        subtitle: isEnglish ? ar : en,
+      );
+    }).toList();
+  }
+
+  List<SearchableItem> _cadastralItems(
+      String province, String caza, bool isEnglish) {
+    final areas = cazaOptions[province]!
+        .firstWhere((e) => e['Name'] == caza)['CadastralAreas'] as List;
+    return areas.map<SearchableItem>((a) {
+      final ar = (a['nameAr'] ?? a['nameField']) as String;
+      final en = (a['nameEn'] ?? a['nameField']) as String;
+      return SearchableItem(
+        value: a['nameField'] as String,
+        searchText: normalizeSearch('$ar $en'),
+        subtitle: isEnglish ? ar : en,
+      );
+    }).toList();
   }
 
   Future<void> getInvoice() async {
     FocusManager.instance.primaryFocus?.unfocus();
+    final bool isEnglish =
+        Localizations.localeOf(context).languageCode == 'en';
 
-    if (selectedProvince == null ||
-        selectedProvince == S.of(context).selectProvince) {
-      setState(() {
-        validationMessage = S.of(context).pleaseSelectaProvince;
-      });
+    if (selectedProvince == null) {
+      setState(() => validationMessage = S.of(context).pleaseSelectaProvince);
       return;
     }
-
-    if (selectedCaza == null || selectedCaza == S.of(context).selectCaza) {
-      setState(() {
-        validationMessage = S.of(context).pleaseSelectCaza;
-      });
+    if (selectedCaza == null) {
+      setState(() => validationMessage = S.of(context).pleaseSelectCaza);
       return;
     }
-
-    if (selectedCadastralZone == null ||
-        selectedCadastralZone == S.of(context).selectCadastralZone) {
-      setState(() {
-        validationMessage = S.of(context).pleaseSelectCadastralZone;
-      });
+    if (selectedCadastralZone == null) {
+      setState(
+          () => validationMessage = S.of(context).pleaseSelectCadastralZone);
+      return;
+    }
+    if (parcelController.text.trim().isEmpty) {
+      setState(() => validationMessage = S.of(context).parcelNoIsRequired);
       return;
     }
 
     setState(() {
       isLoading = true;
+      validationMessage = null;
     });
 
     try {
-      final province = cazaOptions[selectedProvince];
+      final caza = cazaOptions[selectedProvince]!.firstWhere(
+          (c) => c['Name'] == selectedCaza,
+          orElse: () => <String, dynamic>{});
+      final area = (caza['CadastralAreas'] as List? ?? []).firstWhere(
+          (a) => a['nameField'] == selectedCadastralZone,
+          orElse: () => <String, dynamic>{});
 
-      final provinceCode = province!.firstWhere(
-          (province) => province['Name'] == selectedProvince,
-          orElse: () => <String, dynamic>{})['Code'];
+      // Derived exactly like Title Register: province & caza both use the caza
+      // 'Code'; the cadastral zone uses the area 'codeField'.
+      final provinceCode = caza['Code'];
+      final cazaCode = caza['Code'];
+      final cadastralZoneCode = area['codeField'];
 
-      final cazaCode = province.firstWhere(
-          (caza) => caza['Name'] == selectedCaza,
-          orElse: () => <String, dynamic>{})['Code'];
+      final parcelNumber = int.tryParse(parcelController.text.trim()) ?? 0;
+      // Optional numeric params must be a number — the API returns 400 for an
+      // empty value, so blanks default to 0.
+      final unitCode = int.tryParse(unitController.text.trim()) ?? 0;
+      // Block is an alphanumeric code (e.g. "A", "12B") — send as text, not an
+      // int. Blank defaults to 0 (the API returns 400 for an empty value).
+      final blockRaw = blockController.text.trim();
+      final blockNumber =
+          blockRaw.isEmpty ? '0' : Uri.encodeComponent(blockRaw);
+      final yearOfbirth = int.tryParse(yearOfBirthController.text.trim()) ?? 0;
+      final registerPlace = registrationPlaceController.text.trim();
+      final registerNo =
+          int.tryParse(registrationNoController.text.trim()) ?? 0;
+      final partyName = partyController.text.trim();
 
-      final cadastralZone = province
-          .firstWhere((caza) => caza['Name'] == selectedCaza,
-              orElse: () => <String, dynamic>{})['CadastralAreas']
-          .firstWhere((area) => area['nameField'] == selectedCadastralZone,
-              orElse: () => <String, dynamic>{});
-
-      final cadastralZoneCode = cadastralZone['codeField'];
-
-      final parcelNumber = int.tryParse(parcelController.text);
-      final unitCode = int.tryParse(unitController.text);
-      final blockNumber = int.tryParse(blockController.text);
-      final yearOfbirth = int.tryParse(yearOfBirthController.text);
-      final registerPlace = registrationPlaceController.text;
-      final registerNo = int.tryParse(registrationNoController.text);
-
-      // Build URL
-      String url = 'https://test-app.lrc.gov.lb/api/invctracking/getinvoice'
+      final url = 'https://test-app.lrc.gov.lb/api/invctracking/getinvoice'
           '?p_province=$provinceCode'
           '&p_caza=$cazaCode'
           '&p_cad=$cadastralZoneCode'
-          '&p_parcel=${parcelNumber ?? ''}'
-          '&p_unit=${unitCode ?? ''}'
-          '&p_block=${blockNumber ?? ''}'
-          '&p_PARTY_NAME='
+          '&p_parcel=$parcelNumber'
+          '&p_unit=$unitCode'
+          '&p_block=$blockNumber'
+          '&p_PARTY_NAME=$partyName'
           '&p_SIGIL_PLACE=$registerPlace'
-          '&p_SIGIL_NO=${registerNo ?? ''}'
-          '&p_YEAR_OF_BIRTH=${yearOfbirth ?? ''}';
+          '&p_SIGIL_NO=$registerNo'
+          '&p_YEAR_OF_BIRTH=$yearOfbirth';
+
+      // ---- Logs (visible in `flutter logs` / logcat) --------------------
+      debugPrint('========== [getInvoice] ==========');
+      debugPrint('[getInvoice] selection -> province=$selectedProvince '
+          'caza=$selectedCaza cadastral=$selectedCadastralZone');
+      debugPrint('[getInvoice] codes -> p_province=$provinceCode '
+          'p_caza=$cazaCode p_cad=$cadastralZoneCode parcel=$parcelNumber');
+      debugPrint('[getInvoice] URL => $url');
 
       final response = await http.get(Uri.parse(url));
+      debugPrint(
+          '[getInvoice] status=${response.statusCode}  body=${response.body}');
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final decoded = json.decode(response.body);
 
-        final List<dynamic> invoiceList = data['TR'];
+        // The endpoint sometimes returns a plain string message instead of the
+        // {"TR": [...]} object (e.g. "this property does not exist / is not
+        // verified"). Show it instead of treating it as an error.
+        if (decoded is String) {
+          setState(() {
+            storedInvoice = [];
+            codeDetails = null;
+            isDetailsVisible = false;
+            storedInvoiceDetails = null;
+            validationMessage = decoded;
+          });
+          return;
+        }
+
+        final data = decoded as Map<String, dynamic>;
+        final List<dynamic> invoiceList = (data['TR'] as List<dynamic>?) ?? [];
 
         setState(() {
           storedInvoice = invoiceList;
+          isDetailsVisible = false;
+          storedInvoiceDetails = null;
           if (invoiceList.isNotEmpty) {
             codeDetails = invoiceList[0]['dAILY_REGISTER_IDField'];
+            validationMessage = null;
+          } else {
+            codeDetails = null;
+            validationMessage = isEnglish
+                ? 'No invoices found for the entered details.'
+                : 'لا توجد فواتير بالمعلومات المُدخلة.';
           }
         });
       } else {
+        debugPrint('[getInvoice] ERROR HTTP ${response.statusCode}');
         throw Exception('Failed with status code: ${response.statusCode}');
       }
     } catch (e) {
+      debugPrint('[getInvoice] EXCEPTION $e');
       if (mounted) {
         ErrorSnackbar.show(
           context: context,
@@ -237,15 +326,17 @@ class PaidInvoicesState extends State<PaidInvoices> {
         );
       }
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> getInvoiceDetails() async {
     if (codeDetails == null) {
-      log('Error: codeDetails is null');
+      debugPrint('[getInvoiceDetails] codeDetails is null — nothing to fetch');
       return;
     }
 
@@ -257,18 +348,21 @@ class PaidInvoicesState extends State<PaidInvoices> {
       final url = Uri.parse(
           'https://test-app.lrc.gov.lb/api/invctracking/getinvoicedetails?dr_id=$codeDetails');
 
+      debugPrint('========== [getInvoiceDetails] ==========');
+      debugPrint('[getInvoiceDetails] dr_id=$codeDetails');
+      debugPrint('[getInvoiceDetails] URL => $url');
+
       final response = await http.get(url);
+      debugPrint(
+          '[getInvoiceDetails] status=${response.statusCode}  body=${response.body}');
 
       if (response.statusCode == 200) {
-        Map<String, dynamic> data = json.decode(response.body);
-
-        if (data.isEmpty) {
-          log('Invoice details data is null or empty');
-          return;
-        }
+        if (!mounted) return;
+        final Map<String, dynamic> data =
+            json.decode(response.body) as Map<String, dynamic>;
 
         setState(() {
-          storedInvoiceDetails = data['iNVOICE_TAB_DETAILs'];
+          storedInvoiceDetails = data['iNVOICE_TAB_DETAILs'] as List<dynamic>?;
         });
       } else {
         throw Exception('Failed ');
@@ -281,9 +375,11 @@ class PaidInvoicesState extends State<PaidInvoices> {
         );
       }
     } finally {
-      setState(() {
-        isloadingDetails = false;
-      });
+      if (mounted) {
+        setState(() {
+          isloadingDetails = false;
+        });
+      }
     }
   }
 
@@ -305,6 +401,8 @@ class PaidInvoicesState extends State<PaidInvoices> {
       registrationPlaceController.clear();
       registrationNoController.clear();
       partyController.clear();
+      validationMessage = null;
+      isDetailsVisible = false;
     });
   }
 
@@ -378,6 +476,18 @@ class PaidInvoicesState extends State<PaidInvoices> {
                             _buildCadastralZoneDropdown(),
                             const SizedBox(height: 16),
                             _buildForm(),
+                            if (validationMessage != null &&
+                                validationMessage!.trim().isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  validationMessage!,
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             const SizedBox(height: 16),
                             _buildInvoiceList(),
                             const SizedBox(height: 16),
@@ -396,125 +506,65 @@ class PaidInvoicesState extends State<PaidInvoices> {
   }
 
   Widget _buildProvinceDropdown() {
-    return DropdownButtonFormField<String>(
-      value: selectedProvince ?? S.of(context).selectProvince,
-      items: [
-        DropdownMenuItem<String>(
-          value: S.of(context).selectProvince,
-          child: Text(S.of(context).selectProvince),
-        ),
-        ...provinces.map((String value) {
-          return DropdownMenuItem<String>(
-            value: value,
-            child: Text(value),
-          );
-        })
-      ],
-      onChanged: (newValue) {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    return SearchableDropdown(
+      hint: S.of(context).selectProvince,
+      searchHint: isEnglish ? 'Search province' : 'ابحث عن المحافظة',
+      icon: Icons.location_on_outlined,
+      value: selectedProvince,
+      items: _provinceItems(isEnglish),
+      onSelected: (newValue) {
         setState(() {
-          selectedProvince =
-              newValue == S.of(context).selectProvince ? null : newValue;
-          if (selectedProvince != null) {
-            selectedCaza =
-                cazaOptions[selectedProvince!]!.first['Name'] as String?;
-            selectedCadastralZone = cazaOptions[selectedProvince!]!
-                .first['CadastralAreas']
-                .first['nameField'] as String?;
-          } else {
-            selectedCaza = null;
-            selectedCadastralZone = null;
-          }
+          selectedProvince = newValue;
+          selectedCaza =
+              cazaOptions[selectedProvince]!.first['Name'] as String?;
+          selectedCadastralZone = cazaOptions[selectedProvince]!
+              .first['CadastralAreas']
+              .first['nameField'] as String?;
         });
-      },
-      validator: (value) {
-        if (value == null || value == S.of(context).selectProvince) {
-          return S.of(context).provinceIsRequired;
-        }
-        return null;
       },
     );
   }
 
   Widget _buildCazaDropdown() {
-    return DropdownButtonFormField<String>(
-      value: selectedCaza ?? S.of(context).selectCaza,
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    return SearchableDropdown(
+      hint: S.of(context).selectCaza,
+      searchHint: isEnglish ? 'Search caza' : 'ابحث عن القضاء',
+      icon: Icons.map_outlined,
+      value: selectedCaza,
+      enabled: selectedProvince != null,
       items: selectedProvince != null
-          ? [
-              DropdownMenuItem<String>(
-                value: S.of(context).selectCaza,
-                child: Text(S.of(context).selectCaza),
-              ),
-              ...cazaOptions[selectedProvince!]!.map((caza) {
-                return DropdownMenuItem<String>(
-                  value: caza['Name'] as String,
-                  child: Text(caza['Name'] as String),
-                );
-              }),
-            ]
-          : [
-              DropdownMenuItem<String>(
-                value: S.of(context).selectCaza,
-                child: Text(S.of(context).selectCaza),
-              ),
-            ],
-      onChanged: (newValue) {
+          ? _cazaItems(selectedProvince!, isEnglish)
+          : const [],
+      onSelected: (newValue) {
         setState(() {
-          selectedCaza = newValue == S.of(context).selectCaza ? null : newValue;
-          if (selectedCaza != null) {
-            selectedCadastralZone = cazaOptions[selectedProvince!]!
-                .firstWhere((element) => element['Name'] == selectedCaza)[
-                    'CadastralAreas']
-                .first['nameField'] as String?;
-          } else {
-            selectedCadastralZone = null;
-          }
+          selectedCaza = newValue;
+          selectedCadastralZone = cazaOptions[selectedProvince!]!
+              .firstWhere((element) => element['Name'] == selectedCaza)[
+                  'CadastralAreas']
+              .first['nameField'] as String?;
         });
-      },
-      validator: (value) {
-        if (value == null || value == S.of(context).selectCaza) {
-          return S.of(context).cazaIsRequired;
-        }
-        return null;
       },
     );
   }
 
   Widget _buildCadastralZoneDropdown() {
-    return DropdownButtonFormField<String>(
-      value: selectedCadastralZone ?? S.of(context).selectCadastralZone,
-      items: selectedProvince != null && selectedCaza != null
-          ? [
-              DropdownMenuItem<String>(
-                value: S.of(context).selectCadastralZone,
-                child: Text(S.of(context).selectCadastralZone),
-              ),
-              ...cazaOptions[selectedProvince!]!
-                  .firstWhere((element) => element['Name'] == selectedCaza)[
-                      'CadastralAreas']
-                  .map<DropdownMenuItem<String>>((area) {
-                return DropdownMenuItem<String>(
-                  value: area['nameField'],
-                  child: Text(area['nameField']),
-                );
-              }).toList(),
-            ]
-          : [
-              DropdownMenuItem<String>(
-                value: S.of(context).selectCadastralZone,
-                child: Text(S.of(context).selectCadastralZone),
-              ),
-            ],
-      onChanged: (newValue) {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    return SearchableDropdown(
+      hint: S.of(context).selectCadastralZone,
+      searchHint:
+          isEnglish ? 'Search cadastral zone' : 'ابحث عن المنطقة العقارية',
+      icon: Icons.grid_view_outlined,
+      value: selectedCadastralZone,
+      enabled: selectedProvince != null && selectedCaza != null,
+      items: (selectedProvince != null && selectedCaza != null)
+          ? _cadastralItems(selectedProvince!, selectedCaza!, isEnglish)
+          : const [],
+      onSelected: (newValue) {
         setState(() {
-          selectedCadastralZone =
-              newValue == S.of(context).selectCadastralZone ? null : newValue;
+          selectedCadastralZone = newValue;
         });
-      },
-      validator: (value) {
-        if (value == null || value == S.of(context).selectCadastralZone) {
-          return S.of(context).cadastralZoneIsRequired;
-        }
-        return null;
       },
     );
   }
@@ -552,7 +602,8 @@ class PaidInvoicesState extends State<PaidInvoices> {
             decoration: InputDecoration(
               labelText: S.of(context).blockNo,
             ),
-            keyboardType: TextInputType.number,
+            keyboardType: TextInputType.text,
+            textCapitalization: TextCapitalization.characters,
           ),
           const SizedBox(height: 30),
           Row(

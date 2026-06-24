@@ -1,5 +1,5 @@
-import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:logger/logger.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
 import 'package:flutter_application_1/models/payment_provider.dart';
 import 'package:flutter_application_1/models/province_cache.dart';
@@ -8,7 +8,6 @@ import 'package:flutter_application_1/models/transaction_data.dart';
 import 'package:flutter_application_1/widgets/custom_card_widget_row.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_application_1/screens/personal_information.dart';
@@ -17,10 +16,14 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
-
-const storage = FlutterSecureStorage();
+import '../theme/app_theme.dart';
+import '../widgets/searchable_dropdown.dart';
 
 final ProvinceCache provinceCache = ProvinceCache();
+
+final _log = Logger(
+  printer: PrettyPrinter(methodCount: 0, colors: true, printEmojis: true),
+);
 
 class TitleRegister extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -42,12 +45,14 @@ class TitleRegisterState extends State<TitleRegister> {
   final TextEditingController unitController = TextEditingController();
   final TextEditingController blockController = TextEditingController();
   List<String> provinces = [];
+  // Display-name -> name in each language, used to build bilingual search text.
+  final Map<String, String> provinceAr = {};
+  final Map<String, String> provinceEn = {};
   final Map<String, List<Map<String, dynamic>>> cazaOptions = {};
   final Map<String, List<Map<String, dynamic>>> cadastralZoneOptions = {};
   String? validationMessage;
   bool _isInitialized = false;
   bool isLoading = false;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -59,45 +64,21 @@ class TitleRegisterState extends State<TitleRegister> {
 
   Future<void> fetchProvinces() async {
     try {
-      // Check for cached data
       List<dynamic>? cachedData = await provinceCache.cachedProvinces;
       DateTime? cacheTimestamp = await provinceCache.cacheTimestamp;
       if (cachedData != null && cacheTimestamp != null) {
-        log('Cache hit: Using cached provinces');
-        if (mounted) {
-          setState(() {
-            processProvinces(cachedData);
-          });
-        }
+        _log.d('Cache hit: Using cached provinces');
+        if (mounted) setState(() => processProvinces(cachedData));
         return;
       }
 
-      // final token = await storage.read(key: 'token');
-
-      // if (token == null) {
-      //   log('Token is null');
-      //   if (mounted) {
-      //     ErrorSnackbar.show(
-      //       context: context,
-      //       message: 'Authentication error: Please log in again.',
-      //     );
-      //   }
-      //   return;
-      // }
-
       final url = Uri.parse('https://test-app.lrc.gov.lb/api/locations');
-      // final headers = {
-      //   'Authorization': 'Bearer $token',
-      //   'Content-Type': 'application/json',
-      // };
-
-      // log('Fetching provinces with token: $token');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
-        List<dynamic>? locations = json.decode(response.body);
+        final List<dynamic>? locations = json.decode(response.body);
         if (locations == null || locations.isEmpty) {
-          log('Locations data is null or empty');
+          _log.w('Locations data is null or empty');
           if (mounted) {
             ErrorSnackbar.show(
               context: context,
@@ -107,28 +88,18 @@ class TitleRegisterState extends State<TitleRegister> {
           return;
         }
 
-        log('Fetched ${locations.length} items from API');
+        _log.i('Fetched ${locations.length} provinces');
         await provinceCache.setCachedProvinces(locations);
-
-        if (mounted) {
-          setState(() {
-            processProvinces(locations);
-          });
-        }
+        if (mounted) setState(() => processProvinces(locations));
       } else {
-        throw Exception('Failed to load provinces');
+        throw Exception('HTTP ${response.statusCode}');
       }
     } catch (e) {
+      _log.e('fetchProvinces error: $e');
       if (mounted) {
         ErrorSnackbar.show(
           context: context,
           message: S.of(context).dataFetchingError,
-        );
-      }
-      if (mounted) {
-        ErrorSnackbar.show(
-          context: context,
-          message: 'Error $e',
         );
       }
     }
@@ -140,43 +111,92 @@ class TitleRegisterState extends State<TitleRegister> {
 
     provinces.clear();
     cazaOptions.clear();
-
-    provinces.addAll(locations.map((location) {
-      return isEnglish
-          ? location['NameEnglish'] as String
-          : location['Name'] as String;
-    }).toList());
+    provinceAr.clear();
+    provinceEn.clear();
 
     for (var location in locations) {
-      List<Map<String, dynamic>> cazas =
-          location['Cazas'].map<Map<String, dynamic>>((caza) {
+      final pAr = location['Name'] as String;
+      final pEn = location['NameEnglish'] as String;
+      final pDisplay = isEnglish ? pEn : pAr;
+
+      provinces.add(pDisplay);
+      provinceAr[pDisplay] = pAr;
+      provinceEn[pDisplay] = pEn;
+
+      final cazas = (location['Cazas'] as List).map<Map<String, dynamic>>((caza) {
+        final cAr = caza['Name'] as String;
+        final cEn = caza['NameEnglish'] as String;
         return {
-          'Name': isEnglish
-              ? caza['NameEnglish'] as String
-              : caza['Name'] as String,
+          'Name': isEnglish ? cEn : cAr,
+          'NameAr': cAr,
+          'NameEn': cEn,
           'CadastralAreas':
-              caza['CadastralAreas'].map<Map<String, dynamic>>((area) {
+              (caza['CadastralAreas'] as List).map<Map<String, dynamic>>((area) {
+            final aAr = area['nameField'] as String;
+            final aEn = area['nameEnglishField'] as String;
             return {
-              'nameField': isEnglish
-                  ? area['nameEnglishField'] as String
-                  : area['nameField'] as String,
+              'nameField': isEnglish ? aEn : aAr,
+              'nameAr': aAr,
+              'nameEn': aEn,
               'codeField': area['codeField'],
             };
           }).toList(),
           'Code': caza['Code'],
         };
       }).toList();
-      cazaOptions[isEnglish
-          ? location['NameEnglish'] as String
-          : location['Name'] as String] = cazas;
+      cazaOptions[pDisplay] = cazas;
     }
+  }
+
+  // ---- Bilingual searchable item builders -------------------------------
+
+  List<SearchableItem> _provinceItems(bool isEnglish) {
+    return provinces.map((p) {
+      final ar = provinceAr[p] ?? p;
+      final en = provinceEn[p] ?? p;
+      return SearchableItem(
+        value: p,
+        searchText: normalizeSearch('$ar $en'),
+        subtitle: isEnglish ? ar : en,
+      );
+    }).toList();
+  }
+
+  List<SearchableItem> _cazaItems(String province, bool isEnglish) {
+    return cazaOptions[province]!.map((c) {
+      final ar = (c['NameAr'] ?? c['Name']) as String;
+      final en = (c['NameEn'] ?? c['Name']) as String;
+      return SearchableItem(
+        value: c['Name'] as String,
+        searchText: normalizeSearch('$ar $en'),
+        subtitle: isEnglish ? ar : en,
+      );
+    }).toList();
+  }
+
+  List<SearchableItem> _cadastralItems(
+      String province, String caza, bool isEnglish) {
+    final areas = cazaOptions[province]!
+        .firstWhere((e) => e['Name'] == caza)['CadastralAreas'] as List;
+    return areas.map<SearchableItem>((a) {
+      final ar = (a['nameAr'] ?? a['nameField']) as String;
+      final en = (a['nameEn'] ?? a['nameField']) as String;
+      return SearchableItem(
+        value: a['nameField'] as String,
+        searchText: normalizeSearch('$ar $en'),
+        subtitle: isEnglish ? ar : en,
+      );
+    }).toList();
   }
 
   Future<void> addToCart() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
+    _log.d('[addToCart] province=$selectedProvince caza=$selectedCaza cadastral=$selectedCadastralZone parcel=${parcelController.text} unit=${unitController.text} block=${blockController.text}');
+
     if (selectedProvince == null ||
         selectedProvince == S.of(context).selectProvince) {
+      _log.w('[addToCart] Validation failed: no province selected');
       setState(() {
         validationMessage = S.of(context).pleaseSelectaProvince;
       });
@@ -184,6 +204,7 @@ class TitleRegisterState extends State<TitleRegister> {
     }
 
     if (selectedCaza == null || selectedCaza == S.of(context).selectCaza) {
+      _log.w('[addToCart] Validation failed: no caza selected');
       setState(() {
         validationMessage = 'Please select a caza';
       });
@@ -192,6 +213,7 @@ class TitleRegisterState extends State<TitleRegister> {
 
     if (selectedCadastralZone == null ||
         selectedCadastralZone == S.of(context).selectCadastralZone) {
+      _log.w('[addToCart] Validation failed: no cadastral zone selected');
       setState(() {
         validationMessage = S.of(context).pleaseSelectCadastralZone;
       });
@@ -203,13 +225,6 @@ class TitleRegisterState extends State<TitleRegister> {
     });
 
     try {
-      final token = await storage.read(key: 'token');
-
-      if (token == null) {
-        log('Token is null');
-        throw Exception('Token is null');
-      }
-
       var urlCart = cartCount + 1;
       final provinceCode = cazaOptions[selectedProvince]!
           .firstWhere((caza) => caza['Name'] == selectedCaza)['Code'];
@@ -220,73 +235,45 @@ class TitleRegisterState extends State<TitleRegister> {
           .firstWhere((area) =>
               area['nameField'] == selectedCadastralZone)['codeField'];
       final parcelNumber = int.parse(parcelController.text);
+
+      _log.d('[addToCart] provinceCode=$provinceCode cazaCode=$cazaCode cadastralZoneCode=$cadastralZoneCode parcelNumber=$parcelNumber propertiesCount=$urlCart');
+
       String url =
           'https://test-app.lrc.gov.lb/api/checkproperty?provinceCode=$provinceCode&cazaCode=$cazaCode&cadastralAreaCode=$cadastralZoneCode&parcelNumber=$parcelNumber&propertiesCount=$urlCart';
 
+      // Block is an alphanumeric code (e.g. "A", "12B") — send it as text,
+      // not parsed as an int.
+      final blockValue = Uri.encodeComponent(blockController.text.trim());
       if (unitController.text.isNotEmpty && blockController.text.isNotEmpty) {
         final unitCode = int.parse(unitController.text);
-        final blockNumber = int.parse(blockController.text);
-        url += '&unitCode=$unitCode&blockNumber=$blockNumber';
-      }
-// Check if only unitCode is filled
-      else if (unitController.text.isNotEmpty) {
+        url += '&unitCode=$unitCode&blockNumber=$blockValue';
+        _log.d('[addToCart] unitCode=$unitCode blockNumber=$blockValue');
+      } else if (unitController.text.isNotEmpty) {
         final unitCode = int.parse(unitController.text);
         url += '&unitCode=$unitCode';
+        _log.d('[addToCart] unitCode=$unitCode (no block)');
+      } else if (blockController.text.isNotEmpty) {
+        url += '&blockNumber=$blockValue';
+        _log.d('[addToCart] blockNumber=$blockValue (no unit)');
       }
-// Check if only blockNumber is filled
-      else if (blockController.text.isNotEmpty) {
-        final blockNumber = int.parse(blockController.text);
-        url += '&blockNumber=$blockNumber';
-      }
-      log(url);
 
-      // final headers = {
-      //   'Authorization': 'Bearer $token',
-      //   'Content-Type': 'application/json',
-      // };
+      _log.i('[addToCart] GET $url');
 
       final response = await http.get(Uri.parse(url));
 
+      _log.d('[addToCart] status=${response.statusCode}');
+      _log.d('[addToCart] body=${response.body}');
+
       if (response.statusCode == 200) {
         final result = json.decode(response.body);
-        if (result['isValid']) {
-          bool alreadyAdded = transactions.any((transaction) =>
-              transaction.province == selectedProvince &&
-              transaction.caza == selectedCaza &&
-              transaction.cadastralZone == selectedCadastralZone &&
-              transaction.parcelNo == parcelController.text &&
-              transaction.unitNo == unitController.text &&
-              transaction.blockNo == blockController.text);
-
-          if (alreadyAdded) {
-            setState(() {
-              validationMessage = S.of(context).transactionAlreadyAdded;
-            });
-          } else {
-            setState(() {
-              cartCount++;
-              transactions.add(TransactionData(
-                province: selectedProvince!,
-                caza: selectedCaza!,
-                cadastralZone: selectedCadastralZone!,
-                parcelNo: parcelController.text,
-                unitNo: unitController.text,
-                blockNo: blockController.text,
-                cost: 50000,
-              ));
-              validationMessage = " ";
-            });
-          }
-        } else {
-          setState(() {
-            validationMessage = result['message'];
-          });
-        }
+        _log.d('[addToCart] isValid=${result['isValid']} message=${result['message']}');
+        _processCheckPropertyResult(result);
       } else {
-        log(provinceCode);
+        _log.e('[addToCart] ERROR: HTTP ${response.statusCode} body=${response.body}');
         throw Exception('Failed to validate property');
       }
     } catch (e) {
+      _log.e('[addToCart] EXCEPTION: $e');
       if (mounted) {
         ErrorSnackbar.show(
           context: context,
@@ -297,6 +284,42 @@ class TitleRegisterState extends State<TitleRegister> {
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  void _processCheckPropertyResult(Map<String, dynamic> result) {
+    _log.d('[addToCart] isValid=${result['isValid']} message=${result['message']}');
+    if (result['isValid']) {
+      bool alreadyAdded = transactions.any((t) =>
+          t.province == selectedProvince &&
+          t.caza == selectedCaza &&
+          t.cadastralZone == selectedCadastralZone &&
+          t.parcelNo == parcelController.text &&
+          t.unitNo == unitController.text &&
+          t.blockNo == blockController.text);
+
+      if (alreadyAdded) {
+        _log.w('[addToCart] Transaction already in cart — skipping');
+        setState(() => validationMessage = S.of(context).transactionAlreadyAdded);
+      } else {
+        _log.i('[addToCart] Property valid — adding to cart (total=${cartCount + 1})');
+        setState(() {
+          cartCount++;
+          transactions.add(TransactionData(
+            province: selectedProvince!,
+            caza: selectedCaza!,
+            cadastralZone: selectedCadastralZone!,
+            parcelNo: parcelController.text,
+            unitNo: unitController.text,
+            blockNo: blockController.text,
+            cost: 50000,
+          ));
+          validationMessage = " ";
+        });
+      }
+    } else {
+      _log.w('[addToCart] Property invalid: ${result['message']}');
+      setState(() => validationMessage = result['message']);
     }
   }
 
@@ -391,6 +414,32 @@ class TitleRegisterState extends State<TitleRegister> {
     Navigator.pushReplacementNamed(context, route);
   }
 
+  Future<void> _confirmRemoveTransaction(int index) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(S.of(context).confirmRemove),
+        content: Text(S.of(context).areYouSureYouWantToRemoveTheTransaction),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      setState(() {
+        transactions.removeAt(index);
+        cartCount--;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     var locale = Localizations.localeOf(context);
@@ -425,171 +474,127 @@ class TitleRegisterState extends State<TitleRegister> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
+                            Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.sm),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.08),
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.xl),
+                                  border: Border.all(
+                                      color: AppColors.primary
+                                          .withOpacity(0.25)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.shopping_cart),
-                                    const SizedBox(width: 8),
-                                    Text('$cartCount'),
+                                    const Icon(Icons.shopping_cart_outlined,
+                                        size: 20, color: AppColors.primary),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Text(
+                                      '$cartCount',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
                                   ],
                                 ),
-                              ],
+                              ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.lg),
                             Text(
                               S.of(context).province,
-                              style: const TextStyle(fontSize: 12),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                            DropdownButtonFormField<String>(
-                              value: selectedProvince ??
-                                  S.of(context).selectProvince,
-                              items: [
-                                DropdownMenuItem<String>(
-                                  value: S.of(context).selectProvince,
-                                  child: Text(S.of(context).selectProvince),
-                                ),
-                                ...provinces.map((String value) {
-                                  return DropdownMenuItem<String>(
-                                    value: value,
-                                    child: Text(value),
-                                  );
-                                })
-                              ],
-                              onChanged: (newValue) {
+                            const SizedBox(height: 6),
+                            SearchableDropdown(
+                              hint: S.of(context).selectProvince,
+                              searchHint: isEnglish
+                                  ? 'Search province'
+                                  : 'ابحث عن المحافظة',
+                              icon: Icons.location_on_outlined,
+                              value: selectedProvince,
+                              items: _provinceItems(isEnglish),
+                              onSelected: (newValue) {
                                 setState(() {
-                                  selectedProvince =
-                                      newValue == S.of(context).selectProvince
-                                          ? null
-                                          : newValue;
-                                  if (selectedProvince != null) {
-                                    selectedCaza =
-                                        cazaOptions[selectedProvince!]!
-                                            .first['Name'] as String?;
-                                    selectedCadastralZone =
-                                        cazaOptions[selectedProvince!]!
-                                            .first['CadastralAreas']
-                                            .first['nameField'] as String?;
-                                  } else {
-                                    selectedCaza = null;
-                                    selectedCadastralZone = null;
-                                  }
+                                  selectedProvince = newValue;
+                                  selectedCaza = cazaOptions[selectedProvince]!
+                                      .first['Name'] as String?;
+                                  selectedCadastralZone =
+                                      cazaOptions[selectedProvince]!
+                                          .first['CadastralAreas']
+                                          .first['nameField'] as String?;
                                 });
-                              },
-                              validator: (value) {
-                                if (value == null ||
-                                    value == S.of(context).selectProvince) {
-                                  return S.of(context).provinceIsRequired;
-                                }
-                                return null;
                               },
                             ),
                             const SizedBox(height: 16),
                             Text(
                               S.of(context).caza,
-                              style: const TextStyle(fontSize: 12),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                            DropdownButtonFormField<String>(
-                              value: selectedCaza ?? S.of(context).selectCaza,
+                            const SizedBox(height: 6),
+                            SearchableDropdown(
+                              hint: S.of(context).selectCaza,
+                              searchHint:
+                                  isEnglish ? 'Search caza' : 'ابحث عن القضاء',
+                              icon: Icons.map_outlined,
+                              value: selectedCaza,
+                              enabled: selectedProvince != null,
                               items: selectedProvince != null
-                                  ? [
-                                      DropdownMenuItem<String>(
-                                        value: S.of(context).selectCaza,
-                                        child: Text(S.of(context).selectCaza),
-                                      ),
-                                      ...cazaOptions[selectedProvince!]!
-                                          .map((caza) {
-                                        return DropdownMenuItem<String>(
-                                          value: caza['Name'] as String,
-                                          child: Text(caza['Name'] as String),
-                                        );
-                                      }),
-                                    ]
-                                  : [
-                                      DropdownMenuItem<String>(
-                                        value: S.of(context).selectCaza,
-                                        child: Text(S.of(context).selectCaza),
-                                      ),
-                                    ],
-                              onChanged: (newValue) {
+                                  ? _cazaItems(selectedProvince!, isEnglish)
+                                  : const [],
+                              onSelected: (newValue) {
                                 setState(() {
-                                  selectedCaza =
-                                      newValue == S.of(context).selectCaza
-                                          ? null
-                                          : newValue;
-                                  if (selectedCaza != null) {
-                                    selectedCadastralZone =
-                                        cazaOptions[selectedProvince!]!
-                                            .firstWhere((element) =>
-                                                element['Name'] ==
-                                                selectedCaza)['CadastralAreas']
-                                            .first['nameField'] as String?;
-                                  } else {
-                                    selectedCadastralZone = null;
-                                  }
+                                  selectedCaza = newValue;
+                                  selectedCadastralZone =
+                                      cazaOptions[selectedProvince!]!
+                                          .firstWhere((element) =>
+                                              element['Name'] ==
+                                              selectedCaza)['CadastralAreas']
+                                          .first['nameField'] as String?;
                                 });
-                              },
-                              validator: (value) {
-                                if (value == null ||
-                                    value == S.of(context).selectCaza) {
-                                  return S.of(context).cazaIsRequired;
-                                }
-                                return null;
                               },
                             ),
                             const SizedBox(height: 16),
                             Text(
                               S.of(context).cadastralZone,
-                              style: const TextStyle(fontSize: 12),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                            DropdownButtonFormField<String>(
-                              value: selectedCadastralZone ??
-                                  S.of(context).selectCadastralZone,
-                              items: selectedProvince != null &&
-                                      selectedCaza != null
-                                  ? [
-                                      DropdownMenuItem<String>(
-                                        value:
-                                            S.of(context).selectCadastralZone,
-                                        child: Text(
-                                            S.of(context).selectCadastralZone),
-                                      ),
-                                      ...cazaOptions[selectedProvince!]!
-                                          .firstWhere((element) =>
-                                              element['Name'] ==
-                                              selectedCaza)['CadastralAreas']
-                                          .map<DropdownMenuItem<String>>(
-                                              (area) {
-                                        return DropdownMenuItem<String>(
-                                          value: area['nameField'],
-                                          child: Text(area['nameField']),
-                                        );
-                                      }).toList(),
-                                    ]
-                                  : [
-                                      DropdownMenuItem<String>(
-                                        value:
-                                            S.of(context).selectCadastralZone,
-                                        child: Text(
-                                            S.of(context).selectCadastralZone),
-                                      ),
-                                    ],
-                              onChanged: (newValue) {
+                            const SizedBox(height: 6),
+                            SearchableDropdown(
+                              hint: S.of(context).selectCadastralZone,
+                              searchHint: isEnglish
+                                  ? 'Search cadastral zone'
+                                  : 'ابحث عن المنطقة العقارية',
+                              icon: Icons.grid_view_outlined,
+                              value: selectedCadastralZone,
+                              enabled: selectedProvince != null &&
+                                  selectedCaza != null,
+                              items: (selectedProvince != null &&
+                                      selectedCaza != null)
+                                  ? _cadastralItems(
+                                      selectedProvince!, selectedCaza!, isEnglish)
+                                  : const [],
+                              onSelected: (newValue) {
                                 setState(() {
-                                  selectedCadastralZone = newValue ==
-                                          S.of(context).selectCadastralZone
-                                      ? null
-                                      : newValue;
+                                  selectedCadastralZone = newValue;
                                 });
-                              },
-                              validator: (value) {
-                                if (value == null ||
-                                    value ==
-                                        S.of(context).selectCadastralZone) {
-                                  return S.of(context).cadastralZoneIsRequired;
-                                }
-                                return null;
                               },
                             ),
                             const SizedBox(height: 16),
@@ -625,20 +630,16 @@ class TitleRegisterState extends State<TitleRegister> {
                                     decoration: InputDecoration(
                                       labelText: S.of(context).blockNo,
                                     ),
-                                    keyboardType: TextInputType.number,
+                                    keyboardType: TextInputType.text,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
                                   ),
                                   const SizedBox(height: 30),
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
                                     children: [
-                                      SizedBox(
-                                        child: ElevatedButton(
-                                          style: ButtonStyle(
-                                            backgroundColor:
-                                                WidgetStateProperty.all<Color>(
-                                                    const Color(0xff8c0000)),
-                                          ),
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          style: AppButtons.danger(),
                                           onPressed: () async {
                                             if (_formKey.currentState!
                                                 .validate()) {
@@ -648,41 +649,22 @@ class TitleRegisterState extends State<TitleRegister> {
                                               blockController.clear();
                                             }
                                           },
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10.0),
-                                            child: Text(
-                                              S.of(context).add,
-                                              style: const TextStyle(
-                                                  color: Colors.white),
-                                            ),
-                                          ),
+                                          icon: const Icon(Icons.add, size: 18),
+                                          label: Text(S.of(context).add),
                                         ),
                                       ),
-                                      SizedBox(
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Expanded(
                                         child: ElevatedButton(
-                                          style: ButtonStyle(
-                                            backgroundColor:
-                                                WidgetStateProperty.all<Color>(
-                                                    const Color(0xFF6F6F6F)),
-                                          ),
+                                          style: AppButtons.neutral(),
                                           onPressed: () {},
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10.0),
-                                            child: Text(
-                                              S.of(context).retrieve,
-                                              style: const TextStyle(
-                                                  color: Colors.white),
-                                            ),
-                                          ),
+                                          child: Text(S.of(context).retrieve),
                                         ),
                                       ),
-                                      SizedBox(
+                                      const SizedBox(width: AppSpacing.sm),
+                                      Expanded(
                                         child: ElevatedButton(
-                                          style: ButtonStyle(
-                                            backgroundColor:
-                                                WidgetStateProperty.all<Color>(
-                                                    const Color(0xFF6F6F6F)),
-                                          ),
+                                          style: AppButtons.neutral(),
                                           onPressed: () {
                                             setState(() {
                                               parcelController.clear();
@@ -696,14 +678,7 @@ class TitleRegisterState extends State<TitleRegister> {
                                               validationMessage = " ";
                                             });
                                           },
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(10.0),
-                                            child: Text(
-                                              S.of(context).reset,
-                                              style: const TextStyle(
-                                                  color: Colors.white),
-                                            ),
-                                          ),
+                                          child: Text(S.of(context).reset),
                                         ),
                                       ),
                                     ],
@@ -778,7 +753,10 @@ class TitleRegisterState extends State<TitleRegister> {
                                                 },
                                               ];
 
-                                              return Dismissible(
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                    bottom: AppSpacing.md),
+                                                child: Dismissible(
                                                 key: Key(transaction.parcelNo),
                                                 direction:
                                                     DismissDirection.endToStart,
@@ -839,164 +817,54 @@ class TitleRegisterState extends State<TitleRegister> {
                                                       Icons.delete,
                                                       color: Colors.white),
                                                 ),
-                                                child: SizedBox(
-                                                  width: double.infinity,
-                                                  child: Stack(
-                                                    children: [
-                                                      CustomCardWidgetRow(
-                                                          content: content),
-                                                      isEnglish
-                                                          ? Positioned(
-                                                              top: 0,
-                                                              right: 0,
-                                                              child: IconButton(
-                                                                icon: const Icon(
-                                                                    Icons.close,
-                                                                    color: Color(
-                                                                        0xFF8C0000)),
-                                                                onPressed:
-                                                                    () async {
-                                                                  bool confirm =
-                                                                      await showDialog(
-                                                                    context:
-                                                                        context,
-                                                                    builder:
-                                                                        (BuildContext
-                                                                            context) {
-                                                                      return AlertDialog(
-                                                                        title: Text(S
-                                                                            .of(context)
-                                                                            .confirmRemove),
-                                                                        content: Text(S
-                                                                            .of(context)
-                                                                            .areYouSureYouWantToRemoveTheTransaction),
-                                                                        actions: <Widget>[
-                                                                          TextButton(
-                                                                            onPressed:
-                                                                                () {
-                                                                              Navigator.of(context).pop(false);
-                                                                            },
-                                                                            child:
-                                                                                const Text('Cancel'),
-                                                                          ),
-                                                                          TextButton(
-                                                                            onPressed:
-                                                                                () {
-                                                                              Navigator.of(context).pop(true);
-                                                                            },
-                                                                            child:
-                                                                                const Text('Confirm'),
-                                                                          ),
-                                                                        ],
-                                                                      );
-                                                                    },
-                                                                  );
-
-                                                                  if (confirm) {
-                                                                    setState(
-                                                                        () {
-                                                                      transactions
-                                                                          .removeAt(
-                                                                              index);
-                                                                      cartCount--;
-                                                                    });
-                                                                  }
-                                                                },
-                                                              ),
-                                                            )
-                                                          : Positioned(
-                                                              top: 0,
-                                                              left: 0,
-                                                              child: IconButton(
-                                                                icon: const Icon(
-                                                                    Icons.close,
-                                                                    color: Color(
-                                                                        0xFF8C0000)),
-                                                                onPressed:
-                                                                    () async {
-                                                                  bool confirm =
-                                                                      await showDialog(
-                                                                    context:
-                                                                        context,
-                                                                    builder:
-                                                                        (BuildContext
-                                                                            context) {
-                                                                      return AlertDialog(
-                                                                        title: Text(S
-                                                                            .of(context)
-                                                                            .confirmRemove),
-                                                                        content: Text(S
-                                                                            .of(context)
-                                                                            .areYouSureYouWantToRemoveTheTransaction),
-                                                                        actions: <Widget>[
-                                                                          TextButton(
-                                                                            onPressed:
-                                                                                () {
-                                                                              Navigator.of(context).pop(false);
-                                                                            },
-                                                                            child:
-                                                                                const Text('Cancel'),
-                                                                          ),
-                                                                          TextButton(
-                                                                            onPressed:
-                                                                                () {
-                                                                              Navigator.of(context).pop(true);
-                                                                            },
-                                                                            child:
-                                                                                const Text('Confirm'),
-                                                                          ),
-                                                                        ],
-                                                                      );
-                                                                    },
-                                                                  );
-
-                                                                  if (confirm) {
-                                                                    setState(
-                                                                        () {
-                                                                      transactions
-                                                                          .removeAt(
-                                                                              index);
-                                                                      cartCount--;
-                                                                    });
-                                                                  }
-                                                                },
-                                                              ),
-                                                            )
-                                                    ],
-                                                  ),
+                                                child: CustomCardWidgetRow(
+                                                  content: content,
+                                                  onDelete: () =>
+                                                      _confirmRemoveTransaction(
+                                                          index),
                                                 ),
-                                              );
+                                              ),
+                                            );
                                             },
                                           ),
                                           const SizedBox(height: 16),
-                                          Card(
-                                            color: const Color(0xFF8C0000),
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.all(10.0),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text(
-                                                    S.of(context).total,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    "${calculateTotalCost()}",
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: AppSpacing.md,
+                                                vertical: AppSpacing.md),
+                                            decoration: BoxDecoration(
+                                              gradient: const LinearGradient(
+                                                colors: [
+                                                  AppColors.danger,
+                                                  AppColors.dangerDark,
                                                 ],
                                               ),
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                      AppRadius.lg),
+                                              boxShadow: AppShadows.subtle,
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text(
+                                                  S.of(context).total,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  "${calculateTotalCost()}",
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 18,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ],
@@ -1018,20 +886,14 @@ class TitleRegisterState extends State<TitleRegister> {
                               ),
                             const SizedBox(height: 16),
                             transactions.isNotEmpty
-                                ? Center(
-                                    child: SizedBox(
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              const Color(0xFF6F6F6F),
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        onPressed: proceedToNextScreen,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(10.0),
-                                          child: Text(S.of(context).submit),
-                                        ),
-                                      ),
+                                ? SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      style: AppButtons.primary(),
+                                      onPressed: proceedToNextScreen,
+                                      icon: const Icon(Icons.arrow_forward,
+                                          size: 18),
+                                      label: Text(S.of(context).submit),
                                     ),
                                   )
                                 : const SizedBox(),

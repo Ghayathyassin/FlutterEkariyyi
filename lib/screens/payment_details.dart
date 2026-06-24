@@ -4,11 +4,10 @@ import 'package:flutter_application_1/widgets/custom_card_widget_row.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../generated/l10n.dart';
+import '../theme/app_theme.dart';
 
-const storage = FlutterSecureStorage();
-
-class PaymentDetails extends StatefulWidget {
+class PaymentDetails extends StatelessWidget {
   final Function(Locale) onLocaleChange;
   final String id;
   final String name;
@@ -31,21 +30,17 @@ class PaymentDetails extends StatefulWidget {
   });
 
   @override
-  PersonalInformationState createState() => PersonalInformationState();
-}
-
-class PersonalInformationState extends State<PaymentDetails> {
-  @override
   Widget build(BuildContext context) {
     var locale = Localizations.localeOf(context);
     var isEnglish = locale.languageCode == 'en';
+
     return SafeArea(
       child: Scaffold(
         appBar: CustomAppBar(
           title: '',
           actions: [
             LanguageSwitchButton(
-              onLocaleChange: widget.onLocaleChange,
+              onLocaleChange: onLocaleChange,
               isEnglish: isEnglish,
               reload: false,
             ),
@@ -54,71 +49,89 @@ class PersonalInformationState extends State<PaymentDetails> {
         drawer: const SideDrawer(),
         body: Column(
           children: [
-            const CustomHeader(
-              title: 'Payment Details',
+            CustomHeader(
+              title: isEnglish ? 'Payment Details' : 'تفاصيل الطلب',
               goBack: true,
             ),
-            SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   children: [
+                    _confirmationBanner(isEnglish),
+                    const SizedBox(height: AppSpacing.md),
                     CustomCardWidgetRow(
                       content: [
+                        {'title': 'ID', 'description': id},
+                        {'title': S.of(context).firstName, 'description': name},
                         {
-                          'title': 'ID',
-                          'description': widget.id,
+                          'title': S.of(context).lastName,
+                          'description': lastName
                         },
                         {
-                          'title': 'Name',
-                          'description': widget.name,
+                          'title': S.of(context).telephone,
+                          'description': mobile
                         },
+                        {'title': S.of(context).email, 'description': email},
+                        {'title': S.of(context).city, 'description': city},
                         {
-                          'title': 'Last Name',
-                          'description': widget.lastName,
-                        },
-                        {
-                          'title': 'Mobile',
-                          'description': widget.mobile,
-                        },
-                        {
-                          'title': 'Email',
-                          'description': widget.email,
-                        },
-                        {
-                          'title': 'City',
-                          'description': widget.city,
-                        },
-                        {
-                          'title': 'Address',
-                          'description': widget.address,
+                          'title': S.of(context).address,
+                          'description': address
                         },
                       ],
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: AppSpacing.xl),
                     SizedBox(
-                      child: ElevatedButton(
-                        style: ButtonStyle(
-                          backgroundColor: WidgetStateProperty.all<Color>(
-                              const Color(0xff8c0000)),
-                        ),
-                        onPressed: () =>
-                            Navigator.pushReplacementNamed(context, '/index'),
-                        child: const Padding(
-                          padding: EdgeInsets.all(10.0),
-                          child: Text(
-                            "Back To Home Screen",
-                            style: TextStyle(color: Colors.white),
-                          ),
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: AppButtons.primary(),
+                        onPressed: () => Navigator.pushReplacementNamed(
+                            context, '/index'),
+                        icon: const Icon(Icons.home_outlined, size: 20),
+                        label: Text(
+                          isEnglish
+                              ? 'Back To Home Screen'
+                              : 'العودة إلى الصفحة الرئيسية',
                         ),
                       ),
                     ),
+                    const SizedBox(height: AppSpacing.md),
                   ],
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _confirmationBanner(bool isEnglish) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.success.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.success.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, color: AppColors.success, size: 32),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              isEnglish
+                  ? 'Your request has been recorded. Keep your ID for later use.'
+                  : 'تم تسجيل طلبك. احتفظ بالمعرّف لاستخدامه لاحقًا.',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

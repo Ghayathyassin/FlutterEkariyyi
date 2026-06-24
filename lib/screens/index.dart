@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/drawer_state.dart';
 import 'package:flutter_application_1/widgets/category.dart';
-import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import '../generated/l10n.dart';
+import '../theme/app_theme.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class Index extends StatelessWidget {
@@ -20,225 +20,242 @@ class Index extends StatelessWidget {
     Navigator.pushReplacementNamed(context, route);
   }
 
+  // The custom "L.L" mark used for the Paid Invoices tile.
+  Widget _llShape(double size) {
+    Widget singleL() => Expanded(
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: Container(
+                  width: size * 0.15,
+                  height: size,
+                  color: AppColors.primary,
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Container(
+                  width: size * 0.4,
+                  height: size * 0.15,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          singleL(),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Align(
+              alignment: Alignment.bottomRight,
+              child: Container(width: 4, height: 4, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(width: 2),
+          singleL(),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    var locale = Localizations.localeOf(context);
-    var isEnglish = locale.languageCode == 'en';
-    final screenSize = MediaQuery.of(context).size;
-    final double iconSize = screenSize.width * 0.13;
+    final locale = Localizations.localeOf(context);
+    final isEnglish = locale.languageCode == 'en';
+    final width = MediaQuery.of(context).size.width;
+    final bool wide = width > 600;
+    final double pad = wide ? 32 : 20;
 
-    String addLineBreaks(String text) {
-      List<String> words = text.split(' ');
+    final categories = <Widget>[
+      Category(
+        function: () => _navigateTo(context, 1, '/titleRegister'),
+        title: S.of(context).titleRegister,
+        icon: FontAwesomeIcons.filePen,
+        accent: AppColors.primary,
+      ),
+      Category(
+        function: () => _navigateTo(context, 2, '/transactionTracking'),
+        title: S.of(context).transactionTracking,
+        icon: FontAwesomeIcons.listCheck,
+        accent: AppColors.info,
+      ),
+      Category(
+        function: () => _navigateTo(context, 4, '/titleRegisterChange'),
+        title: S.of(context).titleRegisterChanges,
+        icon: FontAwesomeIcons.pencil,
+        accent: AppColors.amber,
+      ),
+      Category(
+        function: () => _navigateTo(context, 3, '/feesSimulation'),
+        title: S.of(context).feesSimulation,
+        icon: Icons.calculate_outlined,
+        accent: AppColors.danger,
+      ),
+      Category(
+        function: () => _navigateTo(context, 5, '/ownershipTracking'),
+        title: S.of(context).ownershipReqTracking,
+        icon: FontAwesomeIcons.streetView,
+        accent: AppColors.info,
+      ),
+      Category(
+        function: () => _navigateTo(context, 6, '/paidInvoices'),
+        title: S.of(context).paidInvoices,
+        customIcon: _llShape(22),
+        accent: AppColors.primary,
+      ),
+    ];
 
-      if (words.length > 2) {
-        return '${words[0]}\n${words[1]} ${words.sublist(2).join(' ')}';
-      } else if (words.length == 2) {
-        return '${words[0]}\n${words[1]}';
-      } else {
-        return text;
-      }
-    }
-
-    // The L.L shape
-    Widget llShape(double size) {
-      return SizedBox(
-        width: size,
-        height: size,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // First L shape
-            Expanded(
-              child: Stack(
+    return Scaffold(
+      backgroundColor: AppColors.scaffold,
+      drawer: const SideDrawer(),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(context, isEnglish, pad),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(pad, AppSpacing.lg, pad, AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      width: size * 0.15,
-                      height: size,
-                      color: const Color(0xff006401),
-                    ),
+                  Text(isEnglish ? 'Services' : 'الخدمات', style: AppType.h2),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    isEnglish ? 'Choose a service to begin' : 'اختر خدمة للبدء',
+                    style: AppType.bodyMuted,
                   ),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: size * 0.4,
-                      height: size * 0.15,
-                      color: const Color(0xff006401),
-                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  GridView.count(
+                    crossAxisCount: wide ? 3 : 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: AppSpacing.md,
+                    crossAxisSpacing: AppSpacing.md,
+                    childAspectRatio: 1.0,
+                    children: categories,
                   ),
                 ],
               ),
             ),
-            // Point between them
-            const SizedBox(width: 2),
+          ),
+        ],
+      ),
+    );
+  }
 
-            Expanded(
-              child: Stack(
+  Widget _buildHeader(BuildContext context, bool isEnglish, double pad) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: kPrimaryGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33004d01),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(pad, AppSpacing.sm, pad, AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: 5,
-                      height: 5,
-                      color: const Color(0xff006401),
+                  Builder(
+                    builder: (ctx) => _iconPill(
+                      icon: Icons.menu,
+                      onTap: () => Scaffold.of(ctx).openDrawer(),
                     ),
                   ),
+                  const Spacer(),
+                  SizedBox(
+                    height: 30,
+                    child: Image.asset('assets/images/logoHeader.png'),
+                  ),
+                  const Spacer(),
+                  _langPill(isEnglish),
                 ],
               ),
-            ),
-            const SizedBox(width: 2),
-            // Second L shape
-            Expanded(
-              child: Stack(
-                children: [
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      width: size * 0.15,
-                      height: size,
-                      color: const Color(0xff006401),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: size * 0.4,
-                      height: size * 0.15,
-                      color: const Color(0xff006401),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return SafeArea(
-      child: Scaffold(
-        appBar: CustomAppBar(
-          title: '',
-          actions: [
-            Align(
-              alignment: Alignment.center,
-              child: TextButton(
-                child: Text(
-                  isEnglish ? 'Ar' : 'En',
-                  style: const TextStyle(fontSize: 25, color: Colors.white),
-                ),
-                onPressed: () {
-                  onLocaleChange(
-                      isEnglish ? const Locale('ar') : const Locale('en'));
-                },
-              ),
-            ),
-          ],
-        ),
-        drawer: const SideDrawer(),
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            double horizontalPadding = 16.0;
-            double verticalPadding = 8.0;
-            double spacing = 27.0;
-
-            if (constraints.maxWidth > 600) {
-              horizontalPadding = 32.0;
-              verticalPadding = 16.0;
-              spacing = 43.0;
-            }
-
-            return SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                    horizontal: horizontalPadding, vertical: verticalPadding),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const SizedBox(height: 30),
-
-                    // First Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Category(
-                            function: () =>
-                                _navigateTo(context, 1, '/titleRegister'),
-                            title: addLineBreaks(S.of(context).titleRegister),
-                            icon: FontAwesomeIcons.filePen,
-                          ),
-                        ),
-                        SizedBox(width: spacing),
-                        Expanded(
-                          child: Category(
-                            function: () =>
-                                _navigateTo(context, 2, '/transactionTracking'),
-                            title: addLineBreaks(
-                                S.of(context).transactionTracking),
-                            icon: FontAwesomeIcons.listCheck,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: spacing),
-
-                    // Second Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Category(
-                            function: () =>
-                                _navigateTo(context, 4, '/titleRegisterChange'),
-                            title: addLineBreaks(
-                                S.of(context).titleRegisterChanges),
-                            icon: FontAwesomeIcons.pencil,
-                          ),
-                        ),
-                        SizedBox(width: spacing),
-                        Expanded(
-                          child: Category(
-                            function: () =>
-                                _navigateTo(context, 3, '/feesSimulation'),
-                            title: addLineBreaks(S.of(context).feesSimulation),
-                            icon: Icons.calculate,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: spacing),
-
-                    // Third Row
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Category(
-                            function: () =>
-                                _navigateTo(context, 5, '/ownershipTracking'),
-                            title: addLineBreaks(
-                                S.of(context).ownershipReqTracking),
-                            icon: FontAwesomeIcons.streetView,
-                          ),
-                        ),
-                        SizedBox(width: spacing),
-                        Expanded(
-                          child: Category(
-                            function: () =>
-                                _navigateTo(context, 6, '/paidInvoices'),
-                            title: addLineBreaks(S.of(context).paidInvoices),
-                            customIcon:
-                                llShape(iconSize), // Use the custom "L.L" shape
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                isEnglish ? 'LAND REGISTRY & CADASTRE' : 'السجل العقاري والمساحة',
+                style: AppType.eyebrow.copyWith(
+                  color: Colors.white.withOpacity(0.82),
                 ),
               ),
-            );
-          },
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                isEnglish ? 'Welcome' : 'مرحباً بك',
+                style: AppType.display.copyWith(color: Colors.white),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                isEnglish
+                    ? 'What would you like to do today?'
+                    : 'ماذا تريد أن تنجز اليوم؟',
+                style: AppType.body.copyWith(
+                  color: Colors.white.withOpacity(0.88),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _iconPill({required IconData icon, required VoidCallback onTap}) {
+    return Material(
+      color: Colors.white.withOpacity(0.16),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, color: Colors.white, size: 24),
+        ),
+      ),
+    );
+  }
+
+  Widget _langPill(bool isEnglish) {
+    return Material(
+      color: Colors.white.withOpacity(0.16),
+      borderRadius: BorderRadius.circular(AppRadius.xl),
+      child: InkWell(
+        onTap: () =>
+            onLocaleChange(isEnglish ? const Locale('ar') : const Locale('en')),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.language, color: Colors.white, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                isEnglish ? 'العربية' : 'EN',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

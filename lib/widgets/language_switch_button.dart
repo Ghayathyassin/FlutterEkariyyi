@@ -11,25 +11,46 @@ class LanguageSwitchButton extends StatelessWidget {
       required this.isEnglish,
       this.reload = true});
 
+  void _switch(BuildContext context) {
+    final target = isEnglish ? const Locale('ar') : const Locale('en');
+    if (reload) {
+      final currentRouteName =
+          ModalRoute.of(context)?.settings.name ?? '/index';
+      Navigator.pushReplacementNamed(context, currentRouteName);
+    }
+    onLocaleChange(target);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: TextButton(
-        child: Text(
-          isEnglish ? 'Ar' : 'En',
-          style: const TextStyle(fontSize: 25, color: Colors.white),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      child: Material(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _switch(context),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.language, color: Colors.white, size: 18),
+                const SizedBox(width: 6),
+                Text(
+                  isEnglish ? 'Ar' : 'En',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        onPressed: () {
-          String currentRouteName =
-              ModalRoute.of(context)?.settings.name ?? '/index';
-          if (reload == true) {
-            Navigator.pushReplacementNamed(context, currentRouteName);
-            onLocaleChange(isEnglish ? const Locale('ar') : const Locale('en'));
-          } else {
-            onLocaleChange(isEnglish ? const Locale('ar') : const Locale('en'));
-          }
-        },
       ),
     );
   }

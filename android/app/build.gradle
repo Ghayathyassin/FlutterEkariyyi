@@ -32,6 +32,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Required by flutter_local_notifications (uses java.time APIs).
+        coreLibraryDesugaringEnabled true
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -58,4 +60,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // 1.2.x matches the project's AGP 7.3 (D8/L8 spec format 100).
+    // Newer 2.x uses spec format 200 and requires AGP 8.1+.
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
 }

@@ -7,13 +7,11 @@ import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
+import '../theme/app_theme.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
-const storage = FlutterSecureStorage();
 
 class FeesSimulation extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -79,13 +77,6 @@ class FeesSimulationState extends State<FeesSimulation> {
           _feesData = cachedFees['fees'];
           _isLoading = false;
         });
-        return;
-      }
-
-      final token = await storage.read(key: 'token');
-
-      if (token == null) {
-        log('Token is null');
         return;
       }
 
@@ -737,6 +728,75 @@ class FeesSimulationState extends State<FeesSimulation> {
     });
   }
 
+  /// One row of the fee breakdown. The final row (the total) is rendered as a
+  /// highlighted footer bar; the rest are clean label/value rows separated by
+  /// hairline dividers (no more cards stacked flush against each other).
+  Widget _buildFeeRow(Map<String, String> fee, bool isTotal) {
+    if (isTotal) {
+      return Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.danger, AppColors.dangerDark],
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.md),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              fee['Fee'] ?? '',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            Text(
+              fee['Value'] ?? '',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              fee['Fee'] ?? '',
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Text(
+            fee['Value'] ?? '',
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _navigateTo(BuildContext context, int index, String route) {
     Provider.of<DrawerState>(context, listen: false).setSelectedIndex(index);
     Navigator.pushReplacementNamed(context, route);
@@ -820,99 +880,48 @@ class FeesSimulationState extends State<FeesSimulation> {
                                 const SizedBox.shrink(),
                               const SizedBox(height: 16.0),
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: <Widget>[
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF8C0000),
-                                      foregroundColor: Colors.white,
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: AppButtons.danger(),
+                                      onPressed: _calculateFees,
+                                      child:
+                                          Text(S.of(context).feesCalculation),
                                     ),
-                                    onPressed: _calculateFees,
-                                    child: Text(S.of(context).feesCalculation),
                                   ),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF6F6F6F),
-                                      foregroundColor: Colors.white,
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      style: AppButtons.neutral(),
+                                      onPressed: _resetFields,
+                                      child: Text(S.of(context).reset),
                                     ),
-                                    onPressed: _resetFields,
-                                    child: Text(S.of(context).reset),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 16.0),
                               if (_feesTable != null)
-                                Column(
-                                  children: [
-                                    ListView.builder(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: _feesTable!.length,
-                                      itemBuilder: (context, index) {
-                                        final fee = _feesTable![index];
-                                        final isLastItem =
-                                            index == _feesTable!.length - 1;
-                                        return Card(
-                                          color: isLastItem
-                                              ? const Color(0xFF8C0000)
-                                              : Colors.white,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(8.0),
-                                            child: isLastItem
-                                                ? Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .spaceBetween,
-                                                    children: [
-                                                      Text(
-                                                        fee['Fee']!,
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        fee['Value']!,
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  )
-                                                : Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        fee['Fee']!,
-                                                        style: const TextStyle(
-                                                          color:
-                                                              Color(0xff006401),
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(
-                                                          height: 4.0),
-                                                      Text(
-                                                        fee['Value']!,
-                                                        style: const TextStyle(
-                                                          color: Colors.black,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadius.lg),
+                                    border:
+                                        Border.all(color: AppColors.border),
+                                    boxShadow: AppShadows.card,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: Column(
+                                    children: [
+                                      for (int i = 0;
+                                          i < _feesTable!.length;
+                                          i++)
+                                        _buildFeeRow(
+                                          _feesTable![i],
+                                          i == _feesTable!.length - 1,
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               if (_message != null) ...[
                                 const SizedBox(height: 16.0),

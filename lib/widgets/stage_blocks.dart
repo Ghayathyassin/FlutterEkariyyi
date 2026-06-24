@@ -26,13 +26,12 @@ class StageBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double textWidth = 90;
     final color = getColor(colorCode);
 
     return Column(
       children: [
         Container(
-          width: 80,
+          width: double.infinity,
           height: 60,
           decoration: BoxDecoration(
             color: color,
@@ -40,20 +39,17 @@ class StageBlock extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8.0),
-        SizedBox(
-          width: textWidth,
-          child: AutoSizeText(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-            maxLines: 1,
-            minFontSize: 8,
-            maxFontSize: 10,
-            overflow: TextOverflow.ellipsis,
+        AutoSizeText(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
           ),
+          maxLines: 2,
+          minFontSize: 8,
+          maxFontSize: 11,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

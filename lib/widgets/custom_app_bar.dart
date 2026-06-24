@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   static const double appBarHeight = 65.0;
@@ -17,31 +18,35 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: const Color(0xff006401),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: kPrimaryGradient,
+          boxShadow: AppShadows.subtle,
+        ),
+      ),
       leading: leading ??
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu),
-              iconSize: appBarHeight * 0.55,
+              iconSize: appBarHeight * 0.5,
               color: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  vertical: (appBarHeight - appBarHeight * 0.55) / 2),
+              tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
               onPressed: () {
                 Scaffold.of(context).openDrawer();
               },
             ),
           ),
-      title: Center(
-        child: SizedBox(
-          height: appBarHeight * 0.8,
-          child: Center(
-            child: Image.asset(
-              'assets/images/logoHeader.png',
-              fit: BoxFit.contain,
-            ),
-          ),
+      title: SizedBox(
+        height: appBarHeight * 0.78,
+        child: Image.asset(
+          'assets/images/logoHeader.png',
+          fit: BoxFit.contain,
         ),
       ),
+      centerTitle: true,
       actions: actions,
     );
   }

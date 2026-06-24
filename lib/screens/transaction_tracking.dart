@@ -10,15 +10,12 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:flutter_application_1/widgets/stage_blocks.dart';
 import 'package:flutter_application_1/widgets/status_indicator.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import 'dart:developer';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
-const storage = FlutterSecureStorage();
 
 class TransactionTracking extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -128,13 +125,6 @@ class TransactionTrackingState extends State<TransactionTracking> {
     });
 
     try {
-      final token = await storage.read(key: 'token');
-
-      if (token == null) {
-        log('Token is null');
-        throw Exception('Token is null');
-      }
-
       final applicationDate = _dateController.text;
       final applicationNum = int.parse(_appNoController.text);
 
@@ -144,12 +134,45 @@ class TransactionTrackingState extends State<TransactionTracking> {
       final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
-        final result = json.decode(response.body);
+        if (!mounted) return;
+        final result = json.decode(response.body) as Map<String, dynamic>;
         log("Transaction tracking successful");
+
+        // A "4" progress colour and a missing expiry date mean the API
+        // accepted the request but found no transaction for these details.
+        final progColor = result['prog_color']?.toString() ?? '1';
+        final expRaw = result['P_EXP_IRS_DATE']?.toString();
+        final hasExpiry =
+            expRaw != null && expRaw.isNotEmpty && expRaw != 'null';
+        final hasData = hasExpiry ||
+            result['details'] != null ||
+            const ['1', '2', '3'].contains(progColor);
+
+        if (!hasData) {
+          setState(() {
+            _transactionDetails = {};
+            _message = pageLang == 'A'
+                ? 'لا يوجد معاملة بالمعلومات المُدخلة.'
+                : 'No transaction found for the entered details.';
+          });
+          return;
+        }
+
+        // Only format the expiry date when it is present and parseable —
+        // otherwise a successful lookup was being thrown as a failure.
+        String message = ' ';
+        if (hasExpiry) {
+          try {
+            message =
+                "${S.of(context).dataIsUpdatedUntil} : ${DateFormat('dd-MM-yyyy').format(DateTime.parse(expRaw))}";
+          } catch (_) {
+            message = ' ';
+          }
+        }
+
         setState(() {
           _transactionDetails = result;
-          _message =
-              "${S.of(context).dataIsUpdatedUntil} : ${DateFormat('dd-MM-yyyy').format(DateTime.parse(_transactionDetails['P_EXP_IRS_DATE'].toString()))}";
+          _message = message;
         });
       } else {
         throw Exception('Failed to load transaction data');
@@ -162,9 +185,11 @@ class TransactionTrackingState extends State<TransactionTracking> {
         );
       }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -181,11 +206,22 @@ class TransactionTrackingState extends State<TransactionTracking> {
   }
 
   String? _validation() {
-    if (_selectedAreaOffice == null) {
-      return "Area office is required.";
+    final bool isArabic =
+        Localizations.localeOf(context).languageCode == 'ar';
+
+    if (_selectedAreaOffice == null || _selectedAreaOfficeId == null) {
+      return isArabic ? 'مكتب المنطقة مطلوب.' : 'Area office is required.';
     }
-    if (_selectedDate == null) {
-      return "Date is required.";
+    if (_selectedDate == null || _dateController.text.trim().isEmpty) {
+      return isArabic ? 'تاريخ الطلب مطلوب.' : 'Application date is required.';
+    }
+    if (_appNoController.text.trim().isEmpty) {
+      return isArabic ? 'رقم الطلب مطلوب.' : 'Application number is required.';
+    }
+    if (int.tryParse(_appNoController.text.trim()) == null) {
+      return isArabic
+          ? 'رقم الطلب يجب أن يكون رقماً صحيحاً.'
+          : 'Application number must be a valid number.';
     }
     return null; // No validation errors
   }
@@ -255,22 +291,27 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           S.of(context).areaOffice,
                           style: const TextStyle(fontSize: 12),
                         ),
-                        DropdownButton<String>(
+                        const SizedBox(height: 6.0),
+                        DropdownButtonFormField<String>(
                           hint: Text(S.of(context).selectAreaOffice),
                           value: _selectedAreaOffice,
                           isExpanded: true,
                           items: _areaOffices?.map((value) {
                             return DropdownMenuItem<String>(
                               value: value,
-                              child: Text(value),
+                              child: Text(
+                                value,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             );
                           }).toList(),
                           onChanged: (String? newValue) {
                             setState(() {
                               _selectedAreaOffice = newValue;
-                              _selectedAreaOfficeId = _areaOffices != null
+                              _selectedAreaOfficeId = (_areaOffices != null &&
+                                      newValue != null)
                                   ? _areaOfficesId![
-                                      _areaOffices!.indexOf(newValue!)]
+                                      _areaOffices!.indexOf(newValue)]
                                   : null;
                             });
                           },
@@ -280,6 +321,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           S.of(context).applicationDate,
                           style: const TextStyle(fontSize: 12),
                         ),
+                        const SizedBox(height: 6.0),
                         TextField(
                           controller: _dateController,
                           readOnly: true,
@@ -293,6 +335,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           S.of(context).applicationNo,
                           style: const TextStyle(fontSize: 12),
                         ),
+                        const SizedBox(height: 6.0),
                         TextField(
                           controller: _appNoController,
                           keyboardType: TextInputType.number,
@@ -336,24 +379,43 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           ),
                           const SizedBox(height: 16.0),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              StageBlock(
+                              Expanded(
+                                child: StageBlock(
                                   title: S.of(context).areaOfficer,
-                                  colorCode:
-                                      _transactionDetails['rao_color'] ?? '1'),
-                              StageBlock(
+                                  colorCode: _transactionDetails['rao_color']
+                                          ?.toString() ??
+                                      '1',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: StageBlock(
                                   title: S.of(context).registrar,
-                                  colorCode:
-                                      _transactionDetails['reg_color'] ?? '1'),
-                              StageBlock(
+                                  colorCode: _transactionDetails['reg_color']
+                                          ?.toString() ??
+                                      '1',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: StageBlock(
                                   title: S.of(context).recorder,
-                                  colorCode:
-                                      _transactionDetails['rec_color'] ?? '1'),
-                              StageBlock(
+                                  colorCode: _transactionDetails['rec_color']
+                                          ?.toString() ??
+                                      '1',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: StageBlock(
                                   title: S.of(context).assistantRegistrar,
-                                  colorCode:
-                                      _transactionDetails['areg_color'] ?? '1'),
+                                  colorCode: _transactionDetails['areg_color']
+                                          ?.toString() ??
+                                      '1',
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 16.0),

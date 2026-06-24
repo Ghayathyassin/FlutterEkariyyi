@@ -1,4 +1,5 @@
 import 'dart:developer';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,6 +18,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
+import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import 'splash_screen.dart';
 
 const storage = FlutterSecureStorage();
@@ -26,6 +29,7 @@ void main() async {
   try {
     await Firebase.initializeApp();
     await FirebaseMessaging.instance.requestPermission();
+    await NotificationService.init();
     await dotenv.load(fileName: ".env");
   } catch (e) {
     log('Initialization error: $e');
@@ -51,7 +55,6 @@ class MyApp extends StatefulWidget {
 
 class MyAppState extends State<MyApp> {
   Locale _locale = const Locale('en');
-  String? _token;
 
   @override
   void initState() {
@@ -60,16 +63,18 @@ class MyAppState extends State<MyApp> {
     _getToken();
     // Listen for incoming messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message.notification != null) {
-        log('Message also contained a notification: ${message.notification}');
+      if (message.notification != null && kDebugMode) {
+        log('Foreground push received');
       }
     });
   }
 
   void _getToken() async {
     try {
-      _token = await FirebaseMessaging.instance.getToken();
-      log('Token: $_token');
+      // Fetched so Firebase provisions a push token for this install. The value
+      // itself is a secret-ish identifier, so it is never logged.
+      await FirebaseMessaging.instance.getToken();
+      if (kDebugMode) log('FCM token acquired');
     } catch (e) {
       if (mounted) {
         ErrorSnackbar.show(
@@ -89,7 +94,8 @@ class MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(fontFamily: 'Segoe UI'),
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
       routes: {
         '/index': (context) => Index(
               onLocaleChange: _setLocale,

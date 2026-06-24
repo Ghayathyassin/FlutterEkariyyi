@@ -3,12 +3,17 @@
 
     <!-- Internet permission is required -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required to show notifications on Android 13 (API 33) and above -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="LRC"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
-        
+        android:icon="@mipmap/launcher_icon"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:usesCleartextTraffic="false">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,13 +29,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Intent filter for handling URLs -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https"/>
-            </intent-filter>
+            <!--
+              NOTE: The app opens the payment gateway via an in-app browser tab;
+              it does not receive inbound links. A catch-all https VIEW/BROWSABLE
+              filter was removed because it registered the app as a handler for
+              every https URL on the device (unnecessary attack surface).
+            -->
         </activity>
 
         <meta-data

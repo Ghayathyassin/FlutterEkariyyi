@@ -66,7 +66,7 @@
   "parcelNoIsRequired": "رقم القطعة مطلوب",
   "unitNo": "رقم الوحدة",
   "enterUnitNo": "أدخل رقم الوحدة",
-  "blockNo": "رقم البلوك",
+  "blockNo": "البلوك",
   "enterBlockNo": "أدخل رقم البلوك",
   "add": "إضافة",
   "cancel": "إلغاء",
