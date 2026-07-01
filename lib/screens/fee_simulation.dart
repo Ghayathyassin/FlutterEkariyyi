@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_motion.dart';
 import '../utils/format.dart';
 
 /// Fee simulation. The fee CALCULATIONS are ported 1:1 from the LRC VB.NET
@@ -41,6 +42,8 @@ class FeesSimulationState extends State<FeesSimulation> {
   // "Lebanese nationality" toggle on the Sale form: when checked the sale uses
   // the reduced rate SaleFees.pFaraghResidential instead of pFaragh.
   bool _isForResidential = false;
+  // Bumped on each calculation so the result rows re-cascade in every time.
+  int _calcSeq = 0;
 
   @override
   void didChangeDependencies() {
@@ -547,6 +550,7 @@ class FeesSimulationState extends State<FeesSimulation> {
     setState(() {
       _feesTable = feesTable;
       _message = msg.trim().isEmpty ? null : msg;
+      _calcSeq++;
     });
   }
 
@@ -738,6 +742,7 @@ class FeesSimulationState extends State<FeesSimulation> {
                         const SizedBox(height: 16.0),
                         if (_feesTable != null)
                           Container(
+                            key: ValueKey(_calcSeq),
                             decoration: BoxDecoration(
                               color: AppColors.surface,
                               borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -748,9 +753,13 @@ class FeesSimulationState extends State<FeesSimulation> {
                             child: Column(
                               children: [
                                 for (int i = 0; i < _feesTable!.length; i++)
-                                  _buildFeeRow(
-                                    _feesTable![i],
-                                    i == _feesTable!.length - 1,
+                                  AppReveal(
+                                    delay: AppMotion.stagger * i,
+                                    dy: 12,
+                                    child: _buildFeeRow(
+                                      _feesTable![i],
+                                      i == _feesTable!.length - 1,
+                                    ),
                                   ),
                               ],
                             ),

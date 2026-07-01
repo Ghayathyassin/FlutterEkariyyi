@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../models/drawer_state.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_motion.dart';
 
 class SideDrawer extends StatelessWidget {
   const SideDrawer({super.key});
@@ -83,7 +84,11 @@ class SideDrawer extends StatelessWidget {
                       ? AppColors.drawerSelected
                       : Colors.white.withOpacity(0.82);
 
-                  return Padding(
+                  return AppReveal(
+                    delay: Duration(milliseconds: 45 * index),
+                    dy: 12,
+                    child: Pressable(
+                    child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: Material(
                       color: isSelected
@@ -123,7 +128,9 @@ class SideDrawer extends StatelessWidget {
                         ),
                       ),
                     ),
-                  );
+                  ),
+                  ),
+                );
                 },
               ),
             ),

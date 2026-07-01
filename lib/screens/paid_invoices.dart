@@ -16,6 +16,7 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
+import '../theme/app_motion.dart';
 
 const storage = FlutterSecureStorage();
 
@@ -753,7 +754,9 @@ class PaidInvoicesState extends State<PaidInvoices> {
                     itemCount: storedInvoice!.length,
                     itemBuilder: (context, index) {
                       final invoice = storedInvoice![index];
-                      return CustomCardWidgetRow(
+                      return AppReveal(
+                        delay: AppMotion.stagger * index,
+                        child: CustomCardWidgetRow(
                         content: [
                           {
                             'title': S.of(context).areaOffice,
@@ -776,6 +779,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
                                 invoice['tRANSACTION_DESCField'] ?? '',
                           },
                         ],
+                      ),
                       );
                     },
                   ),
@@ -809,7 +813,9 @@ class PaidInvoicesState extends State<PaidInvoices> {
           itemCount: storedInvoiceDetails!.length,
           itemBuilder: (context, index) {
             final details = storedInvoiceDetails![index];
-            return CustomCardWidgetColumn(
+            return AppReveal(
+              delay: AppMotion.stagger * index,
+              child: CustomCardWidgetColumn(
               content: [
                 {
                   'title': S.of(context).invoiceDate,
@@ -836,6 +842,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
                   'description': details['rEPORTING_DATEField'] ?? '',
                 },
               ],
+            ),
             );
           },
         ),

@@ -7,6 +7,7 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_motion.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class Index extends StatelessWidget {
@@ -136,8 +137,8 @@ class Index extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Home-only welcome banner, flowing straight out of the green
-            // app bar above it (rounded bottom).
-            _buildWelcome(isEnglish, pad),
+            // app bar above it (rounded bottom). Eases down on load.
+            AppReveal(dy: -12, child: _buildWelcome(isEnglish, pad)),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -163,7 +164,16 @@ class Index extends StatelessWidget {
                       mainAxisSpacing: spacing,
                       crossAxisSpacing: spacing,
                       childAspectRatio: aspect,
-                      children: categories,
+                      // Tiles cascade in after the banner, one stagger step
+                      // apart, for an orchestrated home-screen entrance.
+                      children: [
+                        for (int i = 0; i < categories.length; i++)
+                          AppReveal(
+                            delay: const Duration(milliseconds: 140) +
+                                AppMotion.stagger * i,
+                            child: categories[i],
+                          ),
+                      ],
                     );
                   },
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_motion.dart';
 
 /// A modern service tile: a tinted, accent-coloured icon chip, a corner
 /// affordance arrow, and the service name anchored to the bottom. Each tile
@@ -24,7 +25,8 @@ class Category extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Pressable(
+      child: Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.xl),
@@ -76,6 +78,7 @@ class Category extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

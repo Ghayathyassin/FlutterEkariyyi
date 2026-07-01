@@ -18,6 +18,7 @@ import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_motion.dart';
 import '../utils/format.dart';
 import '../widgets/searchable_dropdown.dart';
 
@@ -817,7 +818,9 @@ class TitleRegisterState extends State<TitleRegister> {
                                                 },
                                               ];
 
-                                              return Padding(
+                                              return AppReveal(
+                                                delay: AppMotion.stagger * index,
+                                                child: Padding(
                                                 padding: const EdgeInsets.only(
                                                     bottom: AppSpacing.md),
                                                 child: Dismissible(
@@ -888,6 +891,7 @@ class TitleRegisterState extends State<TitleRegister> {
                                                           index),
                                                 ),
                                               ),
+                                            ),
                                             );
                                             },
                                           ),

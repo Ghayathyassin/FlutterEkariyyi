@@ -201,6 +201,13 @@ class AppTheme {
     );
 
     return base.copyWith(
+      // Modern zoom transition between screens (built-in, no extra deps).
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: ZoomPageTransitionsBuilder(),
+          TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
+        },
+      ),
       textTheme: base.textTheme
           .copyWith(
             headlineSmall: AppType.display,

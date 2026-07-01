@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_motion.dart';
 
 class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -34,7 +35,9 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Row(
+      child: AppReveal(
+        dy: -6,
+        child: Row(
         children: [
           Material(
             color: AppColors.scaffold,
@@ -61,6 +64,7 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
         ],
+      ),
       ),
     );
   }
