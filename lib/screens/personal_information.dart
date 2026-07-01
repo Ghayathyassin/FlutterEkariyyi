@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_application_1/models/payment_provider.dart';
+import 'package:flutter_application_1/models/payment_settings.dart';
 import 'package:flutter_application_1/screens/payment_details.dart';
 import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
@@ -45,19 +46,18 @@ class PersonalInformationState extends State<PersonalInformation>
   final TextEditingController _cityController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   String? _orderId;
-  String? _paymentMethod; // 'VISA' or 'MasterCard' (matches the backend API).
-  bool _showMethodError = false; // Inline error when no method is chosen.
-  bool _isUrlLaunched = false; // Tracks whether the checkout was opened.
-  bool _isSubmitting = false; // Guards against double submission / shows loader.
-  bool _isVerifyingOrder = false; // Shows a full-screen loader on return.
+  String? _paymentMethod;
+  // Server-driven cost/tax/commission, fetched fresh at submit time. Payment
+  // is NOT allowed to proceed without it (set in _submitForm, used at initiate).
+  PaymentSettings? _paymentSettings;
+  bool _showMethodError = false;
+  bool _isUrlLaunched = false;
+  bool _isSubmitting = false;
+  bool _isVerifyingOrder = false;
 
-  /// Where the gateway session is created and verified. The merchant key/id
-  /// now live ONLY on this backend — the app never sees them.
+
   static const String _paymentBase =
       'https://test-app.lrc.gov.lb/api/payment-session';
-
-  /// Commission rate applied on top of the cart total (set by the backend team).
-  static const double _commissionRate = 0.02;
 
   @override
   void initState() {
@@ -239,12 +239,7 @@ class PersonalInformationState extends State<PersonalInformation>
     }
 
     if (_orderId == null || _orderId!.isEmpty || _orderId == '0') {
-      // e_aff_id == 0 is NOT a transport failure — the backend returns it with a
-      // human-readable `message` explaining why no order was created. The most
-      // common case: one or more of the selected properties was already
-      // requested in a recent (unpaid) order, so the backend de-duplicates and
-      // refuses to create a new one. Surface that message instead of a generic
-      // "failed to load" so the user knows what actually happened.
+
       final backendMsg = _cleanBackendMessage(decoded['message']?.toString());
       if (mounted) {
         ErrorSnackbar.show(
@@ -286,6 +281,22 @@ class PersonalInformationState extends State<PersonalInformation>
 
     _setSubmitting(true);
     try {
+      // Payment settings (cost/tax/commission) are mandatory — fetch fresh and
+      // abort BEFORE creating the payment if the endpoint has any problem.
+      try {
+        _paymentSettings = await PaymentSettings.fetch();
+      } catch (e) {
+        if (kDebugMode) debugPrint('[_submitForm] payment-settings failed: $e');
+        _setSubmitting(false);
+        if (mounted) {
+          ErrorSnackbar.show(
+            context: context,
+            message: S.of(context).dataFetchingError,
+          );
+        }
+        return;
+      }
+
       final response = await _createPayment();
       if (kDebugMode) debugPrint('[_submitForm] status=${response.statusCode}');
       if (response.statusCode == 200) {
@@ -345,8 +356,7 @@ class PersonalInformationState extends State<PersonalInformation>
     }
   }
 
-  /// Normalises the local telephone (e.g. "70123456" / "03123456") to the
-  /// international format the gateway expects (e.g. "+96170123456").
+
   String _internationalMobile() {
     var m = _telephoneController.text.trim();
     if (m.startsWith('0')) m = m.substring(1);
@@ -363,9 +373,22 @@ class PersonalInformationState extends State<PersonalInformation>
         return null;
       }
 
-      final double amount =
+      // Base cart total. The commission rate and tax come from the settings
+      // fetched in _submitForm — payment never reaches here without them.
+      final settings = _paymentSettings;
+      if (settings == null) {
+        if (mounted) {
+          ErrorSnackbar.show(
+              context: context, message: S.of(context).dataFetchingError);
+        }
+        return null;
+      }
+
+      final double base =
           Provider.of<PaymentProvider>(context, listen: false).totalAmount;
-      final int commission = (amount * _commissionRate).round();
+      final int commission = settings.commissionFor(base).round();
+      // The charged amount now bundles base + commission + tax.
+      final double amount = base + commission + settings.tax;
 
       final url = Uri.parse('$_paymentBase/initiate');
 
@@ -378,7 +401,7 @@ class PersonalInformationState extends State<PersonalInformation>
         "lastName": _lastNameController.text,
         "email": _emailController.text,
         "mobile": _internationalMobile(),
-        "txtHttp": "https://test-app.lrc.gov.lb/",
+        // "txtHttp": "https://test-app.lrc.gov.lb/",
         "commission": commission,
         "paymentMethod": _paymentMethod,
       };
@@ -417,12 +440,17 @@ class PersonalInformationState extends State<PersonalInformation>
   }
 
   Future<void> _launchCheckoutUrl(String sessionId) async {
+    // Each card brand uses its own gateway host for the hosted checkout page.
+    final host = _paymentMethod == 'MasterCard'
+        ? 'ap-gateway.mastercard.com'
+        : 'creditlibanais-netcommerce.gateway.mastercard.com';
     final checkoutUrl = Uri.parse(
-        'https://creditlibanais-netcommerce.gateway.mastercard.com/checkout/pay/$sessionId?checkoutVersion=1.0.0');
+        'https://$host/checkout/pay/$sessionId?checkoutVersion=1.0.0');
 
-    // Open inside an in-app browser tab (Chrome Custom Tab / SafariVC). It is a
-    // real browser engine (secure, TLS, address bar) and closing it returns to
-    // the app, which then shows the order details.
+    if (kDebugMode) {
+      debugPrint('[checkout] method=$_paymentMethod url=$checkoutUrl');
+    }
+
     if (!await launchUrl(
       checkoutUrl,
       mode: LaunchMode.inAppBrowserView,

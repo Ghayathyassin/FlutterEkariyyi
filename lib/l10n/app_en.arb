@@ -114,7 +114,7 @@
   "constructionAndSubdivisionfee" : "Construction and subdivision fee 1%",
   "deedFeeUunit" : "Deed fee - for each non-common unit",
   "recordingFeeUnit" : "Recording fee for each unit",
-  "topographicFee" : "Topographic fee 1%",
+  "topographicFee" : "Topographic fee",
   "lienFee" : "Lien fee 1%",
   "photocopyFee" : "Photocopy fee - on each page of the lien contract",
   "stampFeePerThousand" : "Stamp fee 4 per thousand of the amount",

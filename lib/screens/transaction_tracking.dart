@@ -46,7 +46,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
 
   Future<void> _fetchAreaOffices() async {
     try {
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/areaoffices');
+      final url = Uri.parse('https://nirs.lrc.gov.lb/api/areaoffices');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -129,7 +129,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
       final applicationNum = int.parse(_appNoController.text);
 
       final url =
-          'https://test-app.lrc.gov.lb/api/drtrack?dr_id=$_selectedAreaOfficeId&dr_no=$applicationNum&dr_date=$applicationDate&PAGE_LANG=$pageLang';
+          'https://nirs.lrc.gov.lb/api/drtrack?dr_id=$_selectedAreaOfficeId&dr_no=$applicationNum&dr_date=$applicationDate&PAGE_LANG=$pageLang';
 
       final response = await http.get(Uri.parse(url));
 

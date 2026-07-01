@@ -59,11 +59,11 @@ class MessageLookup extends MessageLookupByLibrary {
         "confirmRemove": MessageLookupByLibrary.simpleMessage(" تأكيد الإزالة"),
         "confirmYourEmailAddress": MessageLookupByLibrary.simpleMessage(
             "تأكيد عنوان بريدك الإلكتروني"),
-        "construction": MessageLookupByLibrary.simpleMessage("إنشاء"),
+        "construction": MessageLookupByLibrary.simpleMessage("انشاءات"),
         "constructionAndSubdivisionfee":
             MessageLookupByLibrary.simpleMessage("رسم انشاءات وافراز %1"),
         "constructionAndSubdivisions":
-            MessageLookupByLibrary.simpleMessage("الإنشاء والتجزئة"),
+            MessageLookupByLibrary.simpleMessage("انشاءات و افراز"),
         "constructionFee":
             MessageLookupByLibrary.simpleMessage("رسم انشاءات  %1"),
         "contractFee": MessageLookupByLibrary.simpleMessage("رسم عقد"),
@@ -84,7 +84,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "deedFeeUunit":
             MessageLookupByLibrary.simpleMessage("رسم سند-لكل قسم غير مشترك"),
         "deedStampFee": MessageLookupByLibrary.simpleMessage("طابع سند"),
-        "easement": MessageLookupByLibrary.simpleMessage("حق الطريق"),
+        "easement": MessageLookupByLibrary.simpleMessage("حق الانتفاع"),
         "email": MessageLookupByLibrary.simpleMessage("البريد الإلكتروني"),
         "emailIsRequired":
             MessageLookupByLibrary.simpleMessage("البريد الإلكتروني مطلوب"),
@@ -113,12 +113,12 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("الاسم الأول مطلوب"),
         "forgerPassword":
             MessageLookupByLibrary.simpleMessage("نسيت كلمة السر"),
-        "hideDetails": MessageLookupByLibrary.simpleMessage("إخفاء النتيجة"),
+        "hideDetails": MessageLookupByLibrary.simpleMessage("إخفاء التفاصيل"),
         "homepage": MessageLookupByLibrary.simpleMessage("الصفحةالرئيسية"),
         "ifYouHaveTheRentalValueOnlyMultiplyIt":
             MessageLookupByLibrary.simpleMessage(
                 "إذا كان لديك قيمة الإيجار فقط، ضربها بـ 30 وأدخل النتيجة في حقل المبلغ أعلاه"),
-        "inheritance": MessageLookupByLibrary.simpleMessage("الإرث"),
+        "inheritance": MessageLookupByLibrary.simpleMessage("الانتقال"),
         "invalidEmailAddress": MessageLookupByLibrary.simpleMessage(
             "عنوان بريد إلكتروني غير صالح"),
         "invoiceAmount": MessageLookupByLibrary.simpleMessage("قيمة أمر القبض"),
@@ -133,9 +133,9 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("اسم العائلة مطلوب"),
         "lawyersFee":
             MessageLookupByLibrary.simpleMessage("رسم نقابة المحامين 1 بالألف"),
-        "lien": MessageLookupByLibrary.simpleMessage("رهن"),
+        "lien": MessageLookupByLibrary.simpleMessage("تأمين"),
         "lienFee": MessageLookupByLibrary.simpleMessage("رسم تأمين %1"),
-        "lienRemoval": MessageLookupByLibrary.simpleMessage("إزالة الرهن"),
+        "lienRemoval": MessageLookupByLibrary.simpleMessage("فك التأمين"),
         "lienRemovalFee":
             MessageLookupByLibrary.simpleMessage("رسم فك تأمين %1"),
         "login": MessageLookupByLibrary.simpleMessage("تسجيل دخول"),
@@ -147,7 +147,7 @@ class MessageLookup extends MessageLookupByLibrary {
             "خطأ في الشبكة. يرجى التحقق من الاتصال والمحاولة مرة أخرى"),
         "newDeedFee":
             MessageLookupByLibrary.simpleMessage("رسم سند جديد (استبدال سند)"),
-        "notation": MessageLookupByLibrary.simpleMessage("تعليق"),
+        "notation": MessageLookupByLibrary.simpleMessage("اشارات"),
         "notificationDate":
             MessageLookupByLibrary.simpleMessage("تاريخ التبليغ"),
         "ownershipQuery":
@@ -215,7 +215,7 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("اختر نوع الطلب"),
         "selectTransactionType":
             MessageLookupByLibrary.simpleMessage("اختر نوع المعاملة"),
-        "showDetails": MessageLookupByLibrary.simpleMessage("إظهار النتيجة"),
+        "showDetails": MessageLookupByLibrary.simpleMessage("إظهار التفاصيل"),
         "showResult": MessageLookupByLibrary.simpleMessage("إظهار النتيجة"),
         "staff": MessageLookupByLibrary.simpleMessage("الموظف"),
         "stage": MessageLookupByLibrary.simpleMessage("المرحلة"),
@@ -226,7 +226,7 @@ class MessageLookup extends MessageLookupByLibrary {
             "رسم الطابع المالي 4 بالألف من القيمة"),
         "statusDescription": MessageLookupByLibrary.simpleMessage("وصف الحالة"),
         "subdivisionsIntoUnit":
-            MessageLookupByLibrary.simpleMessage("التجزئة إلى وحدة"),
+            MessageLookupByLibrary.simpleMessage("افراز حقوق مختلفة"),
         "submit": MessageLookupByLibrary.simpleMessage("إرسال"),
         "telephone": MessageLookupByLibrary.simpleMessage("الهاتف"),
         "telephoneIsRequired":
@@ -247,11 +247,11 @@ class MessageLookup extends MessageLookupByLibrary {
         "titleRegister": MessageLookupByLibrary.simpleMessage(
             "الإطلاع على الصحيفة العقارية"),
         "titleRegisterChanges":
-            MessageLookupByLibrary.simpleMessage("تغييرات تسجيل العنوان"),
+            MessageLookupByLibrary.simpleMessage("حركة القيود"),
         "titleRegistration":
             MessageLookupByLibrary.simpleMessage("حركة القيود"),
         "topographicFee": MessageLookupByLibrary.simpleMessage(
-            "رسم احداث أعمال الطوبوغرافية %1"),
+            "رسم احداث أعمال الطوبوغرافية"),
         "total": MessageLookupByLibrary.simpleMessage("المجموع"),
         "transactionAlreadyAdded":
             MessageLookupByLibrary.simpleMessage("المعاملة موجودة"),

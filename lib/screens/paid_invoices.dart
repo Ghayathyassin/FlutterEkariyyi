@@ -239,21 +239,19 @@ class PaidInvoicesState extends State<PaidInvoices> {
       final cadastralZoneCode = area['codeField'];
 
       final parcelNumber = int.tryParse(parcelController.text.trim()) ?? 0;
-      // Optional numeric params must be a number — the API returns 400 for an
-      // empty value, so blanks default to 0.
-      final unitCode = int.tryParse(unitController.text.trim()) ?? 0;
-      // Block is an alphanumeric code (e.g. "A", "12B") — send as text, not an
-      // int. Blank defaults to 0 (the API returns 400 for an empty value).
+      // Optional params: when left blank, send an empty value (keep it null) —
+      // do NOT coerce to 0.
+      final unitCode = unitController.text.trim();
+      // Block is an alphanumeric code (e.g. "A", "12B") — send as text. Blank
+      // stays empty.
       final blockRaw = blockController.text.trim();
-      final blockNumber =
-          blockRaw.isEmpty ? '0' : Uri.encodeComponent(blockRaw);
-      final yearOfbirth = int.tryParse(yearOfBirthController.text.trim()) ?? 0;
+      final blockNumber = blockRaw.isEmpty ? '' : Uri.encodeComponent(blockRaw);
+      final yearOfbirth = yearOfBirthController.text.trim();
       final registerPlace = registrationPlaceController.text.trim();
-      final registerNo =
-          int.tryParse(registrationNoController.text.trim()) ?? 0;
+      final registerNo = registrationNoController.text.trim();
       final partyName = partyController.text.trim();
 
-      final url = 'https://test-app.lrc.gov.lb/api/invctracking/getinvoice'
+      final url = 'https://nirs.lrc.gov.lb/api/invctracking/getinvoice'
           '?p_province=$provinceCode'
           '&p_caza=$cazaCode'
           '&p_cad=$cadastralZoneCode'
@@ -346,7 +344,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
       });
 
       final url = Uri.parse(
-          'https://test-app.lrc.gov.lb/api/invctracking/getinvoicedetails?dr_id=$codeDetails');
+          'https://nirs.lrc.gov.lb/api/invctracking/getinvoicedetails?dr_id=$codeDetails');
 
       debugPrint('========== [getInvoiceDetails] ==========');
       debugPrint('[getInvoiceDetails] dr_id=$codeDetails');

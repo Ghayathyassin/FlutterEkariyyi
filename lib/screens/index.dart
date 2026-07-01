@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/drawer_state.dart';
 import 'package:flutter_application_1/widgets/category.dart';
+import 'package:flutter_application_1/widgets/custom_app_bar.dart';
+import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
@@ -108,155 +110,103 @@ class Index extends StatelessWidget {
       Category(
         function: () => _navigateTo(context, 6, '/paidInvoices'),
         title: S.of(context).paidInvoices,
-        customIcon: _llShape(22),
+        customIcon: _llShape(28),
         accent: AppColors.primary,
       ),
     ];
 
+    final int crossAxisCount = wide ? 3 : 2;
+
     return Scaffold(
       backgroundColor: AppColors.scaffold,
-      drawer: const SideDrawer(),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeader(context, isEnglish, pad),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(pad, AppSpacing.lg, pad, AppSpacing.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(isEnglish ? 'Services' : 'الخدمات', style: AppType.h2),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    isEnglish ? 'Choose a service to begin' : 'اختر خدمة للبدء',
-                    style: AppType.bodyMuted,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  GridView.count(
-                    crossAxisCount: wide ? 3 : 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: AppSpacing.md,
-                    crossAxisSpacing: AppSpacing.md,
-                    childAspectRatio: 1.0,
-                    children: categories,
-                  ),
-                ],
-              ),
-            ),
+      appBar: CustomAppBar(
+        title: '',
+        actions: [
+          LanguageSwitchButton(
+            onLocaleChange: onLocaleChange,
+            isEnglish: isEnglish,
+            reload: false,
           ),
         ],
+      ),
+      drawer: const SideDrawer(),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Home-only welcome banner, flowing straight out of the green
+            // app bar above it (rounded bottom).
+            _buildWelcome(isEnglish, pad),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                    pad, AppSpacing.lg, pad, AppSpacing.lg),
+                // The grid sizes itself to the available height so all tiles
+                // fit on one screen with no scrolling.
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final int rows =
+                        (categories.length / crossAxisCount).ceil();
+                    const spacing = AppSpacing.md;
+                    final double cellWidth = (constraints.maxWidth -
+                            spacing * (crossAxisCount - 1)) /
+                        crossAxisCount;
+                    final double cellHeight =
+                        (constraints.maxHeight - spacing * (rows - 1)) / rows;
+                    final double aspect =
+                        cellHeight <= 0 ? 1.0 : cellWidth / cellHeight;
+
+                    return GridView.count(
+                      crossAxisCount: crossAxisCount,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: spacing,
+                      crossAxisSpacing: spacing,
+                      childAspectRatio: aspect,
+                      children: categories,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isEnglish, double pad) {
+  Widget _buildWelcome(bool isEnglish, double pad) {
     return Container(
+      width: double.infinity,
       decoration: const BoxDecoration(
         gradient: kPrimaryGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
             color: Color(0x33004d01),
-            blurRadius: 18,
-            offset: Offset(0, 8),
+            blurRadius: 16,
+            offset: Offset(0, 6),
           ),
         ],
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(pad, AppSpacing.sm, pad, AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Builder(
-                    builder: (ctx) => _iconPill(
-                      icon: Icons.menu,
-                      onTap: () => Scaffold.of(ctx).openDrawer(),
-                    ),
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    height: 30,
-                    child: Image.asset('assets/images/logoHeader.png'),
-                  ),
-                  const Spacer(),
-                  _langPill(isEnglish),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                isEnglish ? 'LAND REGISTRY & CADASTRE' : 'السجل العقاري والمساحة',
-                style: AppType.eyebrow.copyWith(
-                  color: Colors.white.withOpacity(0.82),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                isEnglish ? 'Welcome' : 'مرحباً بك',
-                style: AppType.display.copyWith(color: Colors.white),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                isEnglish
-                    ? 'What would you like to do today?'
-                    : 'ماذا تريد أن تنجز اليوم؟',
-                style: AppType.body.copyWith(
-                  color: Colors.white.withOpacity(0.88),
-                ),
-              ),
-            ],
+      padding: EdgeInsets.fromLTRB(pad, AppSpacing.md, pad, AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isEnglish
+                ? 'LAND REGISTRY & CADASTRE'
+                : 'المديرية العامة للشؤون العقارية',
+            style: AppType.eyebrow.copyWith(
+              color: Colors.white.withOpacity(0.82),
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _iconPill({required IconData icon, required VoidCallback onTap}) {
-    return Material(
-      color: Colors.white.withOpacity(0.16),
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Icon(icon, color: Colors.white, size: 24),
-        ),
-      ),
-    );
-  }
-
-  Widget _langPill(bool isEnglish) {
-    return Material(
-      color: Colors.white.withOpacity(0.16),
-      borderRadius: BorderRadius.circular(AppRadius.xl),
-      child: InkWell(
-        onTap: () =>
-            onLocaleChange(isEnglish ? const Locale('ar') : const Locale('en')),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.language, color: Colors.white, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                isEnglish ? 'العربية' : 'EN',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            isEnglish ? 'Welcome' : 'مرحباً بك',
+            style: AppType.display.copyWith(color: Colors.white),
           ),
-        ),
+        ],
       ),
     );
   }

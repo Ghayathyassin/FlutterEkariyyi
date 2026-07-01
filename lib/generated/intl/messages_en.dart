@@ -261,7 +261,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "titleRegistration":
             MessageLookupByLibrary.simpleMessage("Title Registration"),
         "topographicFee":
-            MessageLookupByLibrary.simpleMessage("Topographic fee 1%"),
+            MessageLookupByLibrary.simpleMessage("Topographic fee"),
         "total": MessageLookupByLibrary.simpleMessage("Total"),
         "transactionAlreadyAdded":
             MessageLookupByLibrary.simpleMessage("Transaction already added"),

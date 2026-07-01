@@ -58,7 +58,7 @@ class SideDrawer extends StatelessWidget {
                     Text(
                       isEnglish
                           ? 'Land Registry & Cadastre'
-                          : 'السجل العقاري والمساحة',
+                          : 'المديرية العامة للشؤون العقارية',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.85),
                         fontSize: 12.5,

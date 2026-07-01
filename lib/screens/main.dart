@@ -1,6 +1,8 @@
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
@@ -23,8 +25,79 @@ import '../theme/app_theme.dart';
 import 'splash_screen.dart';
 
 const storage = FlutterSecureStorage();
+
+/// Levantine (Lebanese) month names, used instead of intl's default Arabic
+/// (يناير، فبراير…). Applied to the shared `ar` DateSymbols so every Arabic
+/// DateFormat AND the Material calendar picker use them.
+const List<String> _levantineArabicMonths = [
+  'كانون الثاني', // January
+  'شباط', // February
+  'آذار', // March
+  'نيسان', // April
+  'أيار', // May
+  'حزيران', // June
+  'تموز', // July
+  'آب', // August
+  'أيلول', // September
+  'تشرين الأول', // October
+  'تشرين الثاني', // November
+  'كانون الأول', // December
+];
+
+/// Overwrites the cached Arabic month names with the Levantine ones.
+/// Must run AFTER the locale's symbols are loaded (i.e. after
+/// GlobalMaterialLocalizations.load), otherwise that load replaces them with
+/// intl's defaults again — which is exactly why the date picker kept showing
+/// يناير/فبراير. The custom delegate below calls this on every `ar` load.
+void _applyLevantineArabicMonths() {
+  try {
+    // `dateSymbols` returns the shared, cached DateSymbols for the locale;
+    // its month lists are mutable, so this changes them app-wide (text + the
+    // Material date-picker, which formats lazily through the same symbols).
+    final symbols = DateFormat('MMMM', 'ar').dateSymbols;
+    symbols.MONTHS = List<String>.from(_levantineArabicMonths);
+    symbols.STANDALONEMONTHS = List<String>.from(_levantineArabicMonths);
+    symbols.SHORTMONTHS = List<String>.from(_levantineArabicMonths);
+    symbols.STANDALONESHORTMONTHS = List<String>.from(_levantineArabicMonths);
+  } catch (e) {
+    log('Levantine month init failed: $e');
+  }
+}
+
+/// Wraps [GlobalMaterialLocalizations] so we can re-apply the Levantine month
+/// override every time the `ar` Material localizations (re)load. Placed BEFORE
+/// GlobalMaterialLocalizations.delegate in the delegates list so it wins for
+/// Arabic; English falls through to the global delegate.
+class _LevantineMaterialLocalizationsDelegate
+    extends LocalizationsDelegate<MaterialLocalizations> {
+  const _LevantineMaterialLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'ar';
+
+  @override
+  Future<MaterialLocalizations> load(Locale locale) async {
+    final localizations =
+        await GlobalMaterialLocalizations.delegate.load(locale);
+    // Symbols are now loaded for this locale; stamp our months on top.
+    _applyLevantineArabicMonths();
+    return localizations;
+  }
+
+  @override
+  bool shouldReload(_LevantineMaterialLocalizationsDelegate old) => false;
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Paint the system status bar (clock / wifi / battery strip) with the brand
+  // green, with light icons, on every screen.
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: AppColors.primary,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  ));
 
   try {
     await Firebase.initializeApp();
@@ -135,6 +208,9 @@ class MyAppState extends State<MyApp> {
       locale: _locale,
       localizationsDelegates: const [
         S.delegate,
+        // Must come before GlobalMaterialLocalizations.delegate so it wins for
+        // Arabic and re-applies the Levantine month names after each load.
+        _LevantineMaterialLocalizationsDelegate(),
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,

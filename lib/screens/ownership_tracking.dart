@@ -43,7 +43,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
 
   Future<void> fetchRequestType() async {
     try {
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/books');
+      final url = Uri.parse('https://nirs.lrc.gov.lb/api/books');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -127,7 +127,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
       final applicationDate = _dateController.text;
       final applicationNum = int.parse(_requestNoController.text);
       String url =
-          'https://test-app.lrc.gov.lb/api/nattrack?dr_id=$_selectedBookNumber&_date=$applicationDate&dr_no=$applicationNum&Dr_date=$applicationDate&PAGE_LANG=$pageLang';
+          'https://nirs.lrc.gov.lb/api/nattrack?dr_id=$_selectedBookNumber&_date=$applicationDate&dr_no=$applicationNum&Dr_date=$applicationDate&PAGE_LANG=$pageLang';
 
       final response = await http.get(Uri.parse(url));
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
 import 'package:flutter_application_1/models/payment_provider.dart';
+import 'package:flutter_application_1/models/payment_settings.dart';
 import 'package:flutter_application_1/models/province_cache.dart';
 import 'package:flutter_application_1/models/transaction_code.dart';
 import 'package:flutter_application_1/models/transaction_data.dart';
@@ -17,6 +18,7 @@ import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
+import '../utils/format.dart';
 import '../widgets/searchable_dropdown.dart';
 
 final ProvinceCache provinceCache = ProvinceCache();
@@ -53,12 +55,46 @@ class TitleRegisterState extends State<TitleRegister> {
   String? validationMessage;
   bool _isInitialized = false;
   bool isLoading = false;
+  // Per-property cost from /configuration/payment-settings (PaymentAmountDLRC),
+  // replacing the previously hardcoded 50000. The screen does NOT proceed
+  // unless these settings load — there is no silent fallback.
+  double _unitCost = 0;
+  bool _settingsLoading = true;
+  bool _settingsFailed = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_isInitialized) {
       fetchProvinces();
+      _fetchPaymentSettings();
       _isInitialized = true;
+    }
+  }
+
+  Future<void> _fetchPaymentSettings() async {
+    if (mounted) {
+      setState(() {
+        _settingsLoading = true;
+        _settingsFailed = false;
+      });
+    }
+    try {
+      final settings = await PaymentSettings.fetch();
+      _log.i('[paymentSettings] unit cost = ${settings.amount}');
+      if (mounted) {
+        setState(() {
+          _unitCost = settings.amount;
+          _settingsLoading = false;
+        });
+      }
+    } catch (e) {
+      _log.e('[paymentSettings] error: $e — blocking screen');
+      if (mounted) {
+        setState(() {
+          _settingsFailed = true;
+          _settingsLoading = false;
+        });
+      }
     }
   }
 
@@ -312,7 +348,7 @@ class TitleRegisterState extends State<TitleRegister> {
             parcelNo: parcelController.text,
             unitNo: unitController.text,
             blockNo: blockController.text,
-            cost: 50000,
+            cost: _unitCost,
           ));
           validationMessage = " ";
         });
@@ -440,6 +476,40 @@ class TitleRegisterState extends State<TitleRegister> {
     }
   }
 
+  // Shown when /configuration/payment-settings could not be loaded. Without it
+  // we have no cost, so the user cannot build a cart — offer a retry only.
+  Widget _buildSettingsError(bool isEnglish) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 56, color: AppColors.neutral),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              S.of(context).dataFetchingError,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            ElevatedButton.icon(
+              style: AppButtons.primary(),
+              onPressed: _fetchPaymentSettings,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(isEnglish ? 'Retry' : 'إعادة المحاولة'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     var locale = Localizations.localeOf(context);
@@ -463,9 +533,11 @@ class TitleRegisterState extends State<TitleRegister> {
             ],
           ),
           drawer: const SideDrawer(),
-          body: provinces.isEmpty
+          body: _settingsLoading || provinces.isEmpty
               ? const Center(child: CircularProgressIndicator())
-              : Column(
+              : _settingsFailed
+                  ? _buildSettingsError(isEnglish)
+                  : Column(
                   children: [
                     CustomHeader(title: S.of(context).titleRegister),
                     Expanded(
@@ -657,14 +729,6 @@ class TitleRegisterState extends State<TitleRegister> {
                                       Expanded(
                                         child: ElevatedButton(
                                           style: AppButtons.neutral(),
-                                          onPressed: () {},
-                                          child: Text(S.of(context).retrieve),
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          style: AppButtons.neutral(),
                                           onPressed: () {
                                             setState(() {
                                               parcelController.clear();
@@ -747,9 +811,9 @@ class TitleRegisterState extends State<TitleRegister> {
                                                 {
                                                   'title':
                                                       '${S.of(context).cost}:',
-                                                  'description': transaction
-                                                      .cost
-                                                      .toString(),
+                                                  'description':
+                                                      formatAmount(
+                                                          transaction.cost),
                                                 },
                                               ];
 
@@ -857,7 +921,8 @@ class TitleRegisterState extends State<TitleRegister> {
                                                   ),
                                                 ),
                                                 Text(
-                                                  "${calculateTotalCost()}",
+                                                  formatAmount(
+                                                      calculateTotalCost()),
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,

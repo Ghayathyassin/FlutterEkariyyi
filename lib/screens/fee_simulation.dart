@@ -1,4 +1,4 @@
-import 'dart:developer';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
 import 'package:flutter_application_1/models/fee_cache.dart';
@@ -7,12 +7,17 @@ import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../utils/format.dart';
 
+/// Fee simulation. The fee CALCULATIONS are ported 1:1 from the LRC VB.NET
+/// `API_Fees_calculator_ar` (`tr_calc`) — constants, formulas and the
+/// round-UP-to-10,000 rule (`calc_round`) mirror the VB reference exactly.
+/// Only the per-type MESSAGES (the hint + footnotes) are read live from
+/// `/api/fees/all`; the fee numbers are NOT taken from that API.
 class FeesSimulation extends StatefulWidget {
   final Function(Locale) onLocaleChange;
 
@@ -28,10 +33,14 @@ class FeesSimulationState extends State<FeesSimulation> {
   final TextEditingController _valueController = TextEditingController();
   String? _message;
   List<Map<String, String>>? _feesTable;
-  Map<String, dynamic> _feesData = {};
-  bool _isLoading = true;
   bool _isValueInputEnabled = true;
   bool _showValue = false;
+  // Fee rates, fixed fees and messages all come from /api/fees/all.
+  Map<String, dynamic> _feesData = {};
+  bool _isLoading = true;
+  // "Lebanese nationality" toggle on the Sale form: when checked the sale uses
+  // the reduced rate SaleFees.pFaraghResidential instead of pFaragh.
+  bool _isForResidential = false;
 
   @override
   void didChangeDependencies() {
@@ -58,8 +67,72 @@ class FeesSimulationState extends State<FeesSimulation> {
   @override
   void initState() {
     super.initState();
-    feeCalculation();
     _isValueInputEnabled = false;
+    _loadMessages();
+  }
+
+  /// Loads the per-type messages from /api/fees/all (cached via feeCache). Only
+  /// the message strings are consumed — the fee numbers stay hardcoded (VB).
+  Future<void> _loadMessages() async {
+    try {
+      final cachedFees = await feeCache.cachedFees;
+      if (cachedFees != null && cachedFees['fees'] != null) {
+        if (mounted) {
+          setState(() =>
+              _feesData = Map<String, dynamic>.from(cachedFees['fees']));
+        }
+        return;
+      }
+      final url = Uri.parse('https://nirs.lrc.gov.lb/api/fees/all');
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is Map) {
+          await feeCache.setCachedFees({'fees': decoded});
+          if (mounted) {
+            setState(() => _feesData = Map<String, dynamic>.from(decoded));
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorSnackbar.show(
+            context: context, message: S.of(context).dataFetchingError);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// API section name in /api/fees/all for the given transaction type.
+  String _sectionKeyFor(String? type) {
+    if (type == S.of(context).sale) return 'SaleFees';
+    if (type == S.of(context).construction) return 'ConstructionFees';
+    if (type == S.of(context).constructionAndSubdivisions) {
+      return 'ConstructionAndSubdivisionsFees';
+    }
+    if (type == S.of(context).subdivisionsIntoUnit) return 'SubdivisionFees';
+    if (type == S.of(context).lien) return 'LeinFees';
+    if (type == S.of(context).lienRemoval) return 'LienRemovalFees';
+    if (type == S.of(context).easement) return 'EasementFees';
+    if (type == S.of(context).inheritance) return 'InheritanceFees';
+    if (type == S.of(context).notation) return 'NotationFees';
+    return '';
+  }
+
+  /// Reads `message{which}_{en|ar}` for [type] from the fetched fees data.
+  String _apiMessage(String? type, int which, bool isEnglish) {
+    final section = _feesData[_sectionKeyFor(type)];
+    if (section is! Map) return '';
+    final key = 'message${which}_${isEnglish ? 'en' : 'ar'}';
+    return (section[key] ?? '').toString();
+  }
+
+  /// Reads a numeric fee field from a /fees/all section (0 if missing).
+  double _f(dynamic section, String key) {
+    if (section is! Map) return 0;
+    final v = section[key];
+    return v is num ? v.toDouble() : 0;
   }
 
   String capitalizeEachWord(String input) {
@@ -69,45 +142,19 @@ class FeesSimulationState extends State<FeesSimulation> {
     }).join(' ');
   }
 
-  Future<void> feeCalculation() async {
-    try {
-      final cachedFees = await feeCache.cachedFees;
-      if (cachedFees != null) {
-        setState(() {
-          _feesData = cachedFees['fees'];
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/fees/all');
-
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        final feesData = json.decode(response.body);
-        if (feesData == null || feesData.isEmpty) {
-          return;
-        }
-
-        await feeCache.setCachedFees({'fees': feesData});
-
-        setState(() {
-          _feesData = feesData;
-          _isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load fees');
-      }
-    } catch (e) {
-      if (mounted) {
-        ErrorSnackbar.show(
-          context: context,
-          message: S.of(context).dataFetchingError,
-        );
-      }
+  /// 1:1 port of the VB `calc_round`: rounds [amount] UP to the next multiple
+  /// of 10,000 (with a floor of 1). Already-multiples are left unchanged.
+  double _calcRound(double amount) {
+    if (amount < 1) amount = 1;
+    final int remainder = (amount % 10000).round();
+    if (remainder > 0) {
+      return (amount + (10000 - remainder)).roundToDouble();
     }
+    return amount.roundToDouble();
   }
+
+  Map<String, String> _row(String fee, double value) =>
+      {"Fee": fee, "Value": value.toStringAsFixed(2)};
 
   void _resetFields() {
     setState(() {
@@ -117,36 +164,27 @@ class FeesSimulationState extends State<FeesSimulation> {
       _feesTable = null;
       _isValueInputEnabled = false;
       _showValue = false;
+      _isForResidential = false;
     });
   }
 
   void _onTransactionTypeChanged(String? newValue) {
-    var locale = Localizations.localeOf(context);
-    var isEnglish = locale.languageCode == 'en';
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
     setState(() {
       _selectedTransactionType = newValue;
-      if (newValue == S.of(context).inheritance ||
-          newValue == S.of(context).notation) {
-        if (isEnglish) {
-          _message = _feesData["NotationFees"]["message1_en"];
-        } else {
-          _message = _feesData["NotationFees"]["message1_ar"];
-        }
-        _isValueInputEnabled = false;
-        _showValue = false;
-      } else if (newValue == S.of(context).selectTransactionType) {
+      if (newValue == null || newValue == S.of(context).selectTransactionType) {
         _message = null;
         _isValueInputEnabled = false;
         _showValue = false;
       } else {
-        if (isEnglish) {
-          _message = _feesData["SaleFees"]["message1_en"];
-        } else {
-          _message = _feesData["SaleFees"]["message1_ar"];
-        }
-
-        _isValueInputEnabled = true;
-        _showValue = true;
+        // message1 from the API (the hint shown under the picker).
+        final msg = _apiMessage(newValue, 1, isEnglish);
+        _message = msg.trim().isEmpty ? null : msg;
+        // Inheritance & notation don't take a value (VB).
+        final needsValue = newValue != S.of(context).inheritance &&
+            newValue != S.of(context).notation;
+        _isValueInputEnabled = needsValue;
+        _showValue = needsValue;
       }
     });
     _valueController.clear();
@@ -154,8 +192,7 @@ class FeesSimulationState extends State<FeesSimulation> {
   }
 
   void _calculateFees() {
-    var locale = Localizations.localeOf(context);
-    var isEnglish = locale.languageCode == 'en';
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
     FocusManager.instance.primaryFocus?.unfocus();
 
     if (_selectedTransactionType == null) return;
@@ -186,545 +223,330 @@ class FeesSimulationState extends State<FeesSimulation> {
       _handleInheritanceFees(value, isEnglish);
     } else if (_selectedTransactionType == S.of(context).notation) {
       _handleNotationFees(value, isEnglish);
-    } else {
-      log('Selected transaction type does not match');
     }
   }
 
+  // ---- VB Case 1: عملية بيع (Sale) --------------------------------------
   void _handleSaleFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("SaleFees")) return;
-    var saleFees = _feesData["SaleFees"];
+    final s = _feesData['SaleFees'];
+    final double pKimatAked = value;
+    // "Lebanese nationality" checkbox → use the reduced rate
+    // (SaleFees.pFaraghResidential) when ticked; fall back to pFaragh if that
+    // field isn't present in the API yet.
+    final double residentialRate = _f(s, 'pFaraghResidential');
+    final double faraghRate = (_isForResidential && residentialRate > 0)
+        ? residentialRate
+        : _f(s, 'pFaragh');
+    final double pFaragh = _calcRound(pKimatAked * faraghRate);
 
-    double pKimatAked = value;
-    double pFaragh = (pKimatAked * saleFees['pFaragh']).roundToDouble();
-    double totOfRousoum = (pFaragh +
-            saleFees['pRasemSanad'] +
-            saleFees['pRasemAked'] +
-            saleFees['pRasemKayd'])
-        .roundToDouble();
-    double pRasemBaladi =
-        (totOfRousoum * saleFees['pRasemBaladi']).roundToDouble();
-    double pRasemTabeaMali =
-        (pKimatAked * saleFees['pRasemTabeaMali']).roundToDouble();
-    double pRasemNakaba =
-        (pKimatAked * saleFees['pRasemNakaba']).roundToDouble();
-    double finalTot = (totOfRousoum +
-            pRasemBaladi +
-            saleFees['pRasemSanadJadid'] +
-            saleFees['pRasemTabeaAked'] +
-            pRasemTabeaMali +
-            pRasemNakaba +
-            saleFees['pTabeaSanad'])
-        .roundToDouble();
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(
+        pFaragh + pRasemSanad + pRasemAked + pRasemKayd + pRasemSanadJadid);
 
-    _updateFeesTable(
-        [
-          {"Fee": S.of(context).salesFee, "Value": pFaragh.toStringAsFixed(2)},
-          {
-            "Fee": S.of(context).deedFee,
-            "Value": saleFees['pRasemSanad'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": saleFees['pRasemAked'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFee,
-            "Value": saleFees['pRasemKayd'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": saleFees['pRasemSanadJadid'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractStampFee,
-            "Value": saleFees['pRasemTabeaAked'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).stampFeePerThousand,
-            "Value": pRasemTabeaMali.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).lawyersFee,
-            "Value": pRasemNakaba.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedStampFee,
-            "Value": saleFees['pTabeaSanad'].toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)},
-        ],
-        isEnglish
-            ? saleFees['message2_en'] as String
-            : saleFees['message2_ar'] as String);
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+
+    final double pRasemTabeaAked = _f(s, 'pRasemTabeaAked');
+    final double pRasemTabeaMali =
+        _calcRound(pKimatAked * _f(s, 'pRasemTabeaMali'));
+    final double pRasemNakaba = _calcRound(pKimatAked * _f(s, 'pRasemNakaba'));
+    final double pTabeaSanad = _f(s, 'pTabeaSanad');
+
+    final double finalTot = totOfRousoum +
+        pRasemBaladi +
+        pRasemTabeaAked +
+        pRasemTabeaMali +
+        pRasemNakaba +
+        pTabeaSanad;
+
+    _updateFeesTable([
+      _row(S.of(context).salesFee, pFaragh),
+      _row(S.of(context).deedFee, pRasemSanad),
+      _row(S.of(context).contractFee, pRasemAked),
+      _row(S.of(context).recordingFee, pRasemKayd),
+      _row(S.of(context).municipalityFee, pRasemBaladi),
+      _row(S.of(context).newDeedFee, pRasemSanadJadid),
+      _row(S.of(context).contractStampFee, pRasemTabeaAked),
+      _row(S.of(context).stampFeePerThousand, pRasemTabeaMali),
+      _row(S.of(context).lawyersFee, pRasemNakaba),
+      _row(S.of(context).deedStampFee, pTabeaSanad),
+      _row(S.of(context).total, finalTot),
+    ]);
   }
 
+  // ---- VB Case 4: انشاءات (Construction) --------------------------------
   void _handleConstructionFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("ConstructionFees")) return;
-    var constructionFees = _feesData["ConstructionFees"];
+    final s = _feesData['ConstructionFees'];
+    final double pKimatAked = value;
+    final double pInchaat = _calcRound(pKimatAked * _f(s, 'pInchaat'));
 
-    double pKimatAked = value;
-    double pInchaat =
-        (pKimatAked * constructionFees['pInchaat']).roundToDouble();
-    double totOfRousoum = (pInchaat +
-            constructionFees['pTopograph'] +
-            constructionFees['pRasemSanad'] +
-            constructionFees['pRasemAked'] +
-            constructionFees['pRasemKayd'])
-        .roundToDouble();
-    double pRasemBaladi =
-        (totOfRousoum * constructionFees['pRasemBaladi']).roundToDouble();
-    double finalTot =
-        (totOfRousoum + pRasemBaladi + constructionFees['pRasemSanadJadid'])
-            .roundToDouble();
+    final double pTopograph = _f(s, 'pTopograph');
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(
+        pInchaat + pTopograph + pRasemSanad + pRasemAked + pRasemKayd);
+
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+
+    // VB Case 4: final_tot = tot + sanad_jadid (the municipality fee is shown
+    // but intentionally NOT added to the total).
+    final double finalTot = totOfRousoum + pRasemSanadJadid;
 
     _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).constructionFee,
-            "Value": pInchaat.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).advanceTopographicFee,
-            "Value": constructionFees['pTopograph'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedFee,
-            "Value": constructionFees['pRasemSanad'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": constructionFees['pRasemAked'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFee,
-            "Value": constructionFees['pRasemKayd'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": constructionFees['pRasemSanadJadid'].toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)},
-        ],
-        isEnglish
-            ? constructionFees['message2_en'] as String
-            : constructionFees['message2_ar'] as String);
+      [
+        _row(S.of(context).constructionFee, pInchaat),
+        _row(S.of(context).advanceTopographicFee, pTopograph),
+        _row(S.of(context).deedFee, pRasemSanad),
+        _row(S.of(context).contractFee, pRasemAked),
+        _row(S.of(context).recordingFee, pRasemKayd),
+        _row(S.of(context).newDeedFee, pRasemSanadJadid),
+        _row(S.of(context).municipalityFee, pRasemBaladi),
+        _row(S.of(context).total, finalTot),
+      ],
+    );
   }
 
+  // ---- VB Case 5: انشاءات و افراز (Construction & Subdivisions) ----------
   void _handleConstructionAndSubdivisionsFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("ConstructionAndSubdivisionsFees")) return;
-    var constructionAndSubdivisionsFees =
-        _feesData["ConstructionAndSubdivisionsFees"];
+    final s = _feesData['ConstructionAndSubdivisionsFees'];
+    final double pKimatAked = value;
+    final double pInchaat = _calcRound(pKimatAked * _f(s, 'pInchaat'));
 
-    double pKimatAked = value;
-    double pInchaat = (pKimatAked * constructionAndSubdivisionsFees['pInchaat'])
-        .roundToDouble();
-    double pTopograph =
-        constructionAndSubdivisionsFees['pTopograph'].roundToDouble();
-    double pRasemAked =
-        constructionAndSubdivisionsFees['pRasemAked'].roundToDouble();
-    double totOfRousoum = (pInchaat +
-            pTopograph +
-            constructionAndSubdivisionsFees['pRasemSanad'] +
-            pRasemAked +
-            constructionAndSubdivisionsFees['pRasemKayd'])
-        .roundToDouble();
-    double pRasemBaladi =
-        (totOfRousoum * constructionAndSubdivisionsFees['pRasemBaladi'])
-            .roundToDouble();
-    double finalTot = (totOfRousoum +
-            pRasemBaladi +
-            constructionAndSubdivisionsFees['pRasemSanadJadid'])
-        .roundToDouble();
+    final double pTopograph = _f(s, 'pTopograph');
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(pInchaat +
+        pTopograph +
+        pRasemSanad +
+        pRasemAked +
+        pRasemKayd +
+        pRasemSanadJadid);
+
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double finalTot = totOfRousoum + pRasemBaladi;
 
     _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).constructionAndSubdivisionfee,
-            "Value": pInchaat.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).advanceTopographicFee,
-            "Value": pTopograph.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedFeeUunit,
-            "Value": constructionAndSubdivisionsFees['pRasemSanad']
-                .toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFeeUnit,
-            "Value":
-                constructionAndSubdivisionsFees['pRasemKayd'].toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": constructionAndSubdivisionsFees['pRasemSanadJadid']
-                .toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)},
-        ],
-        isEnglish
-            ? constructionAndSubdivisionsFees['message2_en'] as String
-            : constructionAndSubdivisionsFees['message2_ar'] as String);
+      [
+        _row(S.of(context).constructionAndSubdivisionfee, pInchaat),
+        _row(S.of(context).advanceTopographicFee, pTopograph),
+        _row(S.of(context).deedFeeUunit, pRasemSanad),
+        _row(S.of(context).contractFee, pRasemAked),
+        _row(S.of(context).recordingFeeUnit, pRasemKayd),
+        _row(S.of(context).newDeedFee, pRasemSanadJadid),
+        _row(S.of(context).municipalityFee, pRasemBaladi),
+        _row(S.of(context).total, finalTot),
+      ],
+    );
   }
 
+  // ---- VB Case 6: افراز حقوق مختلفة (Subdivisions) ----------------------
   void _handleSubdivisionsIntoUnitFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("SubdivisionFees")) return;
-    var subdivisionsIntoUnitFees = _feesData["SubdivisionFees"];
-    double pKimatAked = value;
-    double pIhdah =
-        (pKimatAked * (subdivisionsIntoUnitFees['pIhda'] ?? 0)).roundToDouble();
-    double pTopograph =
-        (subdivisionsIntoUnitFees['pTopograph'] ?? 0).roundToDouble();
+    final s = _feesData['SubdivisionFees'];
+    final double pKimatAked = value;
+    final double pIhdah = _calcRound(pKimatAked * _f(s, 'pIhda'));
 
-    double totOfRousoum = (pIhdah +
-            pTopograph +
-            (subdivisionsIntoUnitFees['pRasemSanad'] ?? 0) +
-            (subdivisionsIntoUnitFees['pRasemAked'] ?? 0) +
-            (subdivisionsIntoUnitFees['pRasemKayd'] ?? 0))
-        .roundToDouble();
-    double pRasemBaladi =
-        ((totOfRousoum * (subdivisionsIntoUnitFees['pRasemBaladi'] ?? 0))
-            .roundToDouble());
-    double finalTot = (totOfRousoum +
-            pRasemBaladi +
-            (subdivisionsIntoUnitFees['pRasemSanadJadid'] ?? 0))
-        .roundToDouble();
+    final double pTopograph = _f(s, 'pTopograph');
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(pIhdah +
+        pTopograph +
+        pRasemSanad +
+        pRasemAked +
+        pRasemKayd +
+        pRasemSanadJadid);
+
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double finalTot = totOfRousoum + pRasemBaladi;
 
     _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).topographicFee,
-            "Value": pIhdah.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).advanceTopographicFee,
-            "Value": pTopograph.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedFeeUunit,
-            "Value": (subdivisionsIntoUnitFees['pRasemSanad'] ?? 0)
-                .toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value":
-                (subdivisionsIntoUnitFees['pRasemAked'] ?? 0).toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFeeUnit,
-            "Value":
-                (subdivisionsIntoUnitFees['pRasemKayd'] ?? 0).toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": (subdivisionsIntoUnitFees['pRasemSanadJadid'] ?? 0)
-                .toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)}
-        ],
-        isEnglish
-            ? subdivisionsIntoUnitFees['message2_en'] as String
-            : subdivisionsIntoUnitFees['message2_ar'] as String);
+      [
+        _row(S.of(context).topographicFee, pIhdah),
+        _row(S.of(context).advanceTopographicFee, pTopograph),
+        _row(S.of(context).deedFeeUunit, pRasemSanad),
+        _row(S.of(context).contractFee, pRasemAked),
+        _row(S.of(context).recordingFeeUnit, pRasemKayd),
+        _row(S.of(context).newDeedFee, pRasemSanadJadid),
+        _row(S.of(context).municipalityFee, pRasemBaladi),
+        _row(S.of(context).total, finalTot),
+      ],
+    );
   }
 
+  // ---- VB Case 8: تأمين (Lien) ------------------------------------------
   void _handleLienFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("LeinFees")) return;
-    var lienFees = _feesData["LeinFees"];
-    double pKimatAked = value;
+    final s = _feesData['LeinFees'];
+    final double pKimatAked = value;
+    final double pTaamin = _calcRound(pKimatAked * _f(s, 'pTaamin'));
 
-    double pTaamin = (pKimatAked * (lienFees['pTaamin'] ?? 0)).roundToDouble();
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pSoura = _f(s, 'pSoura');
+    final double totOfRousoum = _calcRound(
+        pTaamin + pRasemSanad + pRasemAked + pRasemKayd + pSoura);
 
-    double pSoura = (lienFees['pSoura'] ?? 0).roundToDouble();
-    double pRasemSanad = (lienFees['pRasemSanad'] ?? 0).roundToDouble();
-    double pRasemAked = (lienFees['pRasemAked'] ?? 0).roundToDouble();
-    double pRasemKayd = (lienFees['pRasemKayd'] ?? 0).roundToDouble();
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double pRasemTabaaMali =
+        _calcRound(pKimatAked * _f(s, 'pRasemTabaaMali'));
+    final double pNakaba = _calcRound(pKimatAked * _f(s, 'pNakaba'));
 
-    double totOfRousoum =
-        (pTaamin + pRasemSanad + pRasemAked + pRasemKayd + pSoura)
-            .roundToDouble();
+    final double finalTot =
+        totOfRousoum + pRasemBaladi + pRasemTabaaMali + pNakaba;
 
-    double pRasemBaladi =
-        ((totOfRousoum * (lienFees['pRasemBaladi'] ?? 0)).roundToDouble());
-    double pRasemTabaaMali =
-        (pKimatAked * (lienFees['pRasemTabaaMali'] ?? 0)).roundToDouble();
-    double pNakaba = (pKimatAked * (lienFees['pNakaba'] ?? 0)).roundToDouble();
-
-    double finalTot = (totOfRousoum + pRasemBaladi + pRasemTabaaMali + pNakaba)
-        .roundToDouble();
-
-    _updateFeesTable(
-        [
-          {"Fee": S.of(context).lien, "Value": pTaamin.toStringAsFixed(2)},
-          {
-            "Fee": S.of(context).deedFee,
-            "Value": pRasemSanad.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFee,
-            "Value": pRasemKayd.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).photocopyFee,
-            "Value": pSoura.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).stampFeePerThousand,
-            "Value": pRasemTabaaMali.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).lawyersFee,
-            "Value": pNakaba.toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)}
-        ],
-        isEnglish
-            ? lienFees['message2_en'] as String
-            : lienFees['message2_ar'] as String);
+    _updateFeesTable([
+      _row(isEnglish ? 'Lien Fee 1%' : 'رسم تأمين 1%', pTaamin),
+      _row(S.of(context).deedFee, pRasemSanad),
+      _row(S.of(context).contractFee, pRasemAked),
+      _row(S.of(context).recordingFee, pRasemKayd),
+      _row(S.of(context).photocopyFee, pSoura),
+      _row(S.of(context).municipalityFee, pRasemBaladi),
+      _row(S.of(context).stampFeePerThousand, pRasemTabaaMali),
+      _row(S.of(context).lawyersFee, pNakaba),
+      _row(S.of(context).total, finalTot),
+    ]);
   }
 
+  // ---- VB Case 7: فك تأمين (Lien removal) -------------------------------
   void _handleLienRemovalFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("LienRemovalFees")) return;
-    var lienRemovalFees = _feesData["LienRemovalFees"];
+    final s = _feesData['LienRemovalFees'];
+    final double pTaamin = _calcRound(value * _f(s, 'pTaamin'));
 
-    double pTaamin =
-        (value * (lienRemovalFees['pTaamin'] ?? 0)).roundToDouble();
-    double pRasemAked = (lienRemovalFees['pRasemAked'] ?? 0).roundToDouble();
-    double pRasemSanad = (lienRemovalFees['pRasemSanad'] ?? 0).roundToDouble();
-    double pRasemKayd = (lienRemovalFees['pRasemKayd'] ?? 0).roundToDouble();
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(
+        pTaamin + pRasemSanad + pRasemAked + pRasemKayd + pRasemSanadJadid);
 
-    double pRasemSanadJadid =
-        (lienRemovalFees['pRasemSanadJadid'] ?? 0).roundToDouble();
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double finalTot = totOfRousoum + pRasemBaladi;
 
-    double totOfRousoum =
-        (pTaamin + pRasemSanad + pRasemAked + pRasemKayd).roundToDouble();
-    double pRasemBaladi =
-        (totOfRousoum * lienRemovalFees['pRasemBaladi']).roundToDouble();
-    double finalTot =
-        (totOfRousoum + pRasemBaladi + pRasemSanadJadid).roundToDouble();
-    _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).lienRemoval,
-            "Value": pTaamin.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedFeeUunit,
-            "Value": pRasemSanad.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFeeUnit,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": pRasemSanadJadid.toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)}
-        ],
-        isEnglish
-            ? lienRemovalFees['message2_en'] as String
-            : lienRemovalFees['message2_ar'] as String);
+    _updateFeesTable([
+      _row(isEnglish ? 'Lien Removal Fee 1%' : 'رسم فك تأمين 1%', pTaamin),
+      _row(S.of(context).deedFeeUunit, pRasemSanad),
+      _row(S.of(context).contractFee, pRasemAked),
+      _row(S.of(context).recordingFeeUnit, pRasemKayd),
+      _row(S.of(context).newDeedFee, pRasemSanadJadid),
+      _row(S.of(context).municipalityFee, pRasemBaladi),
+      _row(S.of(context).total, finalTot),
+    ]);
   }
 
+  // ---- VB Case 10: حق انتفاع (Easement) ---------------------------------
   void _handleEasementFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("EasementFees")) return;
-    var easementFees = _feesData["EasementFees"];
-    log('EasementFees found: $easementFees');
+    final s = _feesData['EasementFees'];
+    final double pKimatAked = value;
 
-    double pKimatAked = value;
-    double pTopograph = (easementFees['pTopograph'] ?? 0).roundToDouble();
-    double pRasemSanadJadid =
-        (easementFees['pRasemSanadJadid'] ?? 0).roundToDouble();
-    double pTabeaAked = (easementFees['pTabeaAked'] ?? 0).roundToDouble();
-    double pRasem5 =
-        (pKimatAked * (easementFees['pRasem5Percentage'] ?? 0)).roundToDouble();
-    double pRasemSanad = (easementFees['pRasemSanad'] ?? 0).roundToDouble();
-    double pRasemAked = (easementFees['pRasemAked'] ?? 0).roundToDouble();
-    double pRasemKayd = (easementFees['pRasemKayd'] ?? 0).roundToDouble();
+    final double pTopograph = _f(s, 'pTopograph');
+    final double pTabeaAked = _f(s, 'pTabeaAked');
+    final double pRasem5 = _calcRound(pKimatAked * _f(s, 'pRasem5'));
 
-    double totOfRousoum = (pTopograph +
-            pTabeaAked +
-            pRasem5 +
-            pRasemSanad +
-            pRasemAked +
-            pRasemKayd)
-        .roundToDouble();
-    double pRasemBaladi =
-        ((totOfRousoum * (easementFees['pRasemBaladi'] ?? 0)).roundToDouble());
-    double pRasemTabaamali =
-        (pKimatAked * (easementFees['pRasemTabaamali'] ?? 0)).roundToDouble();
-    double finalTot =
-        (totOfRousoum + pRasemBaladi + pRasemSanadJadid + pRasemTabaamali)
-            .roundToDouble();
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(pTopograph +
+        pTabeaAked +
+        pRasem5 +
+        pRasemSanad +
+        pRasemAked +
+        pRasemKayd +
+        pRasemSanadJadid);
 
-    _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).topographicFee,
-            "Value": pTopograph.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedFee,
-            "Value": pRasemSanad.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFee,
-            "Value": pRasemKayd.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).stampFeePerThousand,
-            "Value": pRasemTabaamali.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": pRasemSanadJadid.toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)},
-        ],
-        isEnglish
-            ? easementFees['message2_en'] as String
-            : easementFees['message2_ar'] as String);
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double pRasemTabaaMali =
+        _calcRound(pKimatAked * _f(s, 'pRasemTabaamali'));
+    final double pNakaba = _calcRound(pKimatAked * _f(s, 'pNakaba'));
+
+    final double finalTot =
+        totOfRousoum + pRasemBaladi + pNakaba + pRasemTabaaMali;
+
+    _updateFeesTable([
+      _row(S.of(context).topographicFee, pTopograph),
+      _row(S.of(context).contractStampFee, pTabeaAked),
+      _row(isEnglish ? '5% Fee' : 'رسم 5 %', pRasem5),
+      _row(S.of(context).contractFee, pRasemAked),
+      _row(S.of(context).deedFee, pRasemSanad),
+      _row(S.of(context).recordingFee, pRasemKayd),
+      _row(S.of(context).newDeedFee, pRasemSanadJadid),
+      _row(S.of(context).municipalityFee, pRasemBaladi),
+      _row(S.of(context).stampFeePerThousand, pRasemTabaaMali),
+      _row(S.of(context).lawyersFee, pNakaba),
+      _row(S.of(context).total, finalTot),
+    ]);
   }
 
+  // ---- VB Case 11: انتقال (Inheritance / Transfer) ----------------------
   void _handleInheritanceFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("InheritanceFees")) return;
-    var inheritanceFees = _feesData["InheritanceFees"];
-    log('InheritanceFees found: $inheritanceFees');
+    final s = _feesData['InheritanceFees'];
+    final double pRasemTabea = _f(s, 'pRasemTabea');
+    final double pRasemSanad = _f(s, 'pRasemSanad');
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
+    final double totOfRousoum = _calcRound(
+        pRasemSanad + pRasemAked + pRasemKayd + pRasemTabea + pRasemSanadJadid);
 
-    double pRasemTabea = (inheritanceFees['pRasemTabea'] ?? 0).roundToDouble();
-    double pRasemSanad = (inheritanceFees['pRasemSanad'] ?? 0).roundToDouble();
-    double pRasemSanadJadid =
-        (inheritanceFees['pRasemSanadJadid'] ?? 0).roundToDouble();
-    double pRasemAked = (inheritanceFees['pRasemAked'] ?? 0).roundToDouble();
-    double pRasemKayd = (inheritanceFees['pRasemKayd'] ?? 0).roundToDouble();
-
-    double totOfRousoum =
-        (pRasemSanad + pRasemAked + pRasemKayd + pRasemTabea).roundToDouble();
-    double pRasemBaladi =
-        ((totOfRousoum * inheritanceFees['pRasemBaladi']).roundToDouble());
-    double finalTot =
-        (totOfRousoum + pRasemBaladi + pRasemSanadJadid).roundToDouble();
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double finalTot = totOfRousoum + pRasemBaladi;
 
     _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFee,
-            "Value": pRasemKayd.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).stampFee,
-            "Value": pRasemTabea.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).deedFeeOwners,
-            "Value": pRasemSanad.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).newDeedFee,
-            "Value": pRasemSanadJadid.toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)}
-        ],
-        isEnglish
-            ? inheritanceFees['message2_en'] as String
-            : inheritanceFees['message2_ar'] as String);
+      [
+        _row(S.of(context).contractFee, pRasemAked),
+        _row(S.of(context).recordingFee, pRasemKayd),
+        _row(S.of(context).stampFee, pRasemTabea),
+        _row(S.of(context).deedFeeOwners, pRasemSanad),
+        _row(S.of(context).newDeedFee, pRasemSanadJadid),
+        _row(S.of(context).municipalityFee, pRasemBaladi),
+        _row(S.of(context).total, finalTot),
+      ],
+    );
   }
 
+  // ---- VB Case 13: اشارات (Notation) ------------------------------------
   void _handleNotationFees(double value, bool isEnglish) {
-    if (!_feesData.containsKey("NotationFees")) return;
-    var notationFees = _feesData["NotationFees"];
+    final s = _feesData['NotationFees'];
+    final double pRasemAked = _f(s, 'pRasemAked');
+    final double pRasemKayd = _f(s, 'pRasemKayd');
+    final double pIstidaa = _f(s, 'pIstidaa');
+    final double totOfRousoum = _calcRound(pRasemAked + pRasemKayd + pIstidaa);
 
-    double pRasemAked = (notationFees['pRasemAked'] ?? 0).roundToDouble();
-    double pIstidaa = (notationFees['pIstidaa'] ?? 0).roundToDouble();
-    double pRasemKayd = (notationFees['pRasemKayd'] ?? 0).roundToDouble();
-    double totOfRousoum = (pRasemKayd + pRasemAked + pIstidaa).roundToDouble();
-    double pRasemBaladi =
-        ((totOfRousoum * notationFees['pRasemBaladi']).roundToDouble());
-    double finalTot = (totOfRousoum + pRasemBaladi).roundToDouble();
+    final double pRasemBaladi =
+        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
+    final double finalTot = totOfRousoum + pRasemBaladi;
 
-    _updateFeesTable(
-        [
-          {
-            "Fee": S.of(context).contractFee,
-            "Value": pRasemAked.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).recordingFeeProperty,
-            "Value": pRasemKayd.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).applicationFee,
-            "Value": pIstidaa.toStringAsFixed(2)
-          },
-          {
-            "Fee": S.of(context).municipalityFee,
-            "Value": pRasemBaladi.toStringAsFixed(2)
-          },
-          {"Fee": S.of(context).total, "Value": finalTot.toStringAsFixed(2)}
-        ],
-        isEnglish
-            ? notationFees['message2_en'] as String
-            : notationFees['message2_ar'] as String);
+    _updateFeesTable([
+      _row(S.of(context).contractFee, pRasemAked),
+      _row(S.of(context).recordingFeeProperty, pRasemKayd),
+      _row(S.of(context).applicationFee, pIstidaa),
+      _row(S.of(context).municipalityFee, pRasemBaladi),
+      _row(S.of(context).total, finalTot),
+    ]);
   }
 
-  void _updateFeesTable(List<Map<String, String>> feesTable, String message) {
+  void _updateFeesTable(List<Map<String, String>> feesTable) {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    // message2 from the API (the footnote shown under the results).
+    final msg = _apiMessage(_selectedTransactionType, 2, isEnglish);
     setState(() {
       _feesTable = feesTable;
-      _message = message;
+      _message = msg.trim().isEmpty ? null : msg;
     });
   }
 
@@ -754,7 +576,7 @@ class FeesSimulationState extends State<FeesSimulation> {
               ),
             ),
             Text(
-              fee['Value'] ?? '',
+              formatAmountString(fee['Value']),
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -786,7 +608,7 @@ class FeesSimulationState extends State<FeesSimulation> {
           ),
           const SizedBox(width: AppSpacing.md),
           Text(
-            fee['Value'] ?? '',
+            formatAmountString(fee['Value']),
             style: const TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
@@ -834,113 +656,123 @@ class FeesSimulationState extends State<FeesSimulation> {
           body: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : Column(
-                  children: [
-                    CustomHeader(title: S.of(context).feesSimulation),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                S.of(context).transactionType,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              DropdownButtonFormField<String>(
-                                hint: Text(S.of(context).selectTransactionType),
-                                value: _selectedTransactionType,
-                                isExpanded: true,
-                                items: _transactionTypes.map((String value) {
-                                  return DropdownMenuItem<String>(
-                                    value: value,
-                                    child: Text(capitalizeEachWord(value)),
-                                  );
-                                }).toList(),
-                                onChanged: _onTransactionTypeChanged,
-                                dropdownColor: Colors.white,
-                              ),
-                              const SizedBox(height: 16.0),
-                              if (_showValue)
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(S.of(context).valueL),
-                                    TextField(
-                                      controller: _valueController,
-                                      keyboardType: TextInputType.number,
-                                      decoration: InputDecoration(
-                                        hintText: S.of(context).enterValueInL,
-                                      ),
-                                      enabled: _isValueInputEnabled,
-                                    ),
-                                  ],
-                                )
-                              else
-                                const SizedBox.shrink(),
-                              const SizedBox(height: 16.0),
-                              Row(
-                                children: <Widget>[
-                                  Expanded(
-                                    child: ElevatedButton(
-                                      style: AppButtons.danger(),
-                                      onPressed: _calculateFees,
-                                      child:
-                                          Text(S.of(context).feesCalculation),
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: ElevatedButton(
-                                      style: AppButtons.neutral(),
-                                      onPressed: _resetFields,
-                                      child: Text(S.of(context).reset),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16.0),
-                              if (_feesTable != null)
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius:
-                                        BorderRadius.circular(AppRadius.lg),
-                                    border:
-                                        Border.all(color: AppColors.border),
-                                    boxShadow: AppShadows.card,
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: Column(
-                                    children: [
-                                      for (int i = 0;
-                                          i < _feesTable!.length;
-                                          i++)
-                                        _buildFeeRow(
-                                          _feesTable![i],
-                                          i == _feesTable!.length - 1,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              if (_message != null) ...[
-                                const SizedBox(height: 16.0),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    textAlign: TextAlign.justify,
-                                    _message!,
-                                    style: const TextStyle(color: Colors.red),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+            children: [
+              CustomHeader(title: S.of(context).feesSimulation),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          S.of(context).transactionType,
+                          style: const TextStyle(fontSize: 12),
                         ),
-                      ),
+                        DropdownButtonFormField<String>(
+                          hint: Text(S.of(context).selectTransactionType),
+                          value: _selectedTransactionType,
+                          isExpanded: true,
+                          items: _transactionTypes.map((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(capitalizeEachWord(value)),
+                            );
+                          }).toList(),
+                          onChanged: _onTransactionTypeChanged,
+                          dropdownColor: Colors.white,
+                        ),
+                        const SizedBox(height: 16.0),
+                        if (_showValue)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(S.of(context).valueL),
+                              TextField(
+                                controller: _valueController,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  hintText: S.of(context).enterValueInL,
+                                ),
+                                enabled: _isValueInputEnabled,
+                              ),
+                            ],
+                          )
+                        else
+                          const SizedBox.shrink(),
+                        // VB is_for_sakan — residential sale (3% vacancy fee).
+                        if (_selectedTransactionType == S.of(context).sale)
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: _isForResidential,
+                            activeColor: AppColors.primary,
+                            onChanged: (v) => setState(
+                                () => _isForResidential = v ?? false),
+                            title: Text(
+                              isEnglish
+                                  ? 'Lebanese Nationality'
+                                  : 'جنسية لبنانية',
+                            ),
+                          ),
+                        const SizedBox(height: 16.0),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: ElevatedButton(
+                                style: AppButtons.danger(),
+                                onPressed: _calculateFees,
+                                child: Text(S.of(context).feesCalculation),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: AppButtons.neutral(),
+                                onPressed: _resetFields,
+                                child: Text(S.of(context).reset),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16.0),
+                        if (_feesTable != null)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
+                              border: Border.all(color: AppColors.border),
+                              boxShadow: AppShadows.card,
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                for (int i = 0; i < _feesTable!.length; i++)
+                                  _buildFeeRow(
+                                    _feesTable![i],
+                                    i == _feesTable!.length - 1,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        if (_message != null) ...[
+                          const SizedBox(height: 16.0),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              textAlign: TextAlign.justify,
+                              _message!,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ],
+                  ),
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
