@@ -5,6 +5,51 @@ import '../theme/app_decor.dart';
 /// Shared "Cadastral Line" building blocks used across the feature screens so
 /// forms, sections and summaries read as one document.
 
+/// Builds a [DropdownButtonFormField]'s items so each open‑menu option sits
+/// above a hairline, separating the choices with a line. Pair with
+/// [dropdownSelectedBuilder] as the field's `selectedItemBuilder` so the closed
+/// field shows the plain value (no divider / extra padding).
+List<DropdownMenuItem<String>> dividedDropdownItems(
+  List<String> values, {
+  String Function(String)? label,
+}) {
+  return [
+    for (final value in values)
+      DropdownMenuItem<String>(
+        value: value,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.line)),
+          ),
+          child: Text(
+            label != null ? label(value) : value,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+  ];
+}
+
+/// The `selectedItemBuilder` counterpart to [dividedDropdownItems]: renders the
+/// chosen value in the closed field without the menu divider.
+List<Widget> dropdownSelectedBuilder(
+  List<String> values, {
+  String Function(String)? label,
+}) {
+  return [
+    for (final value in values)
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          label != null ? label(value) : value,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+  ];
+}
+
 /// Small field label sitting above an input (13/500, secondary).
 class FieldLabel extends StatelessWidget {
   const FieldLabel(this.text, {super.key});

@@ -245,7 +245,7 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("هذه المعاملة لا تتطلب قيمة"),
         "title": MessageLookupByLibrary.simpleMessage("العربية"),
         "titleRegister": MessageLookupByLibrary.simpleMessage(
-            "الإطلاع على الصحيفة العقارية"),
+            "الصحيفة العقارية"),
         "titleRegisterChanges":
             MessageLookupByLibrary.simpleMessage("حركة القيود"),
         "titleRegistration":

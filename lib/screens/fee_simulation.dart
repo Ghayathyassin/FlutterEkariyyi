@@ -667,12 +667,11 @@ class FeesSimulationState extends State<FeesSimulation> {
                           hint: Text(S.of(context).selectTransactionType),
                           value: _selectedTransactionType,
                           isExpanded: true,
-                          items: _transactionTypes.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(capitalizeEachWord(value)),
-                            );
-                          }).toList(),
+                          items: dividedDropdownItems(_transactionTypes,
+                              label: capitalizeEachWord),
+                          selectedItemBuilder: (context) =>
+                              dropdownSelectedBuilder(_transactionTypes,
+                                  label: capitalizeEachWord),
                           onChanged: _onTransactionTypeChanged,
                           dropdownColor: Colors.white,
                         ),

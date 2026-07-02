@@ -94,7 +94,11 @@ class Index extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AppReveal(dy: -8, child: _buildWelcome(isEnglish, pad)),
+            AppReveal(
+              dy: 0,
+              duration: const Duration(milliseconds: 600),
+              child: _buildWelcome(isEnglish, pad),
+            ),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(pad, AppSpacing.md, pad, pad),

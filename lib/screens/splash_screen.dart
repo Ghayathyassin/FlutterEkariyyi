@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
+import 'index.dart';
 import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -29,19 +31,34 @@ class SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
     _controller.forward();
-    _navigateToMainScreen();
+    _navigateOnward();
   }
 
-  Future<void> _navigateToMainScreen() async {
+  Future<void> _navigateOnward() async {
     await Future.delayed(const Duration(seconds: 3));
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('locale');
     if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            MainScreen(onLocaleChange: widget.onLocaleChange),
-      ),
-    );
+
+    // If the user already picked a language on a previous launch, skip the
+    // picker and go straight to the home dashboard in that language.
+    if (saved == 'en' || saved == 'ar') {
+      widget.onLocaleChange(Locale(saved!));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => Index(onLocaleChange: widget.onLocaleChange),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              MainScreen(onLocaleChange: widget.onLocaleChange),
+        ),
+      );
+    }
   }
 
   @override

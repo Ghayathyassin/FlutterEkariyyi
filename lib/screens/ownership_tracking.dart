@@ -280,15 +280,9 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             hint: Text(S.of(context).requestType),
                             value: _selectedRequestType,
                             isExpanded: true,
-                            items: _requestType?.map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(
-                                  value,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
+                            items: dividedDropdownItems(_requestType ?? []),
+                            selectedItemBuilder: (context) =>
+                                dropdownSelectedBuilder(_requestType ?? []),
                             onChanged: onRequestTypeChanged,
                           ),
                           const SizedBox(height: 16.0),

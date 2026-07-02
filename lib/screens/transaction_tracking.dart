@@ -281,15 +281,9 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           hint: Text(S.of(context).selectAreaOffice),
                           value: _selectedAreaOffice,
                           isExpanded: true,
-                          items: _areaOffices?.map((value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
+                          items: dividedDropdownItems(_areaOffices ?? []),
+                          selectedItemBuilder: (context) =>
+                              dropdownSelectedBuilder(_areaOffices ?? []),
                           onChanged: (String? newValue) {
                             setState(() {
                               _selectedAreaOffice = newValue;

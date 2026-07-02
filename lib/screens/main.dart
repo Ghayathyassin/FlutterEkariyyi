@@ -19,6 +19,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../generated/l10n.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
@@ -132,6 +133,9 @@ class MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    // Restore the language the user picked on a previous launch (if any) so the
+    // whole app comes up in it.
+    _loadSavedLocale();
     // Retrieve the token on app start up
     _getToken();
     // Listen for incoming messages
@@ -158,10 +162,26 @@ class MyAppState extends State<MyApp> {
     }
   }
 
+  Future<void> _loadSavedLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('locale');
+    if ((saved == 'en' || saved == 'ar') && mounted) {
+      setState(() => _locale = Locale(saved!));
+    }
+  }
+
   void _setLocale(Locale locale) {
     setState(() {
       _locale = locale;
     });
+    // Persist the choice so the language is remembered across launches (the
+    // splash screen uses this to skip the picker once a language is set).
+    _persistLocale(locale);
+  }
+
+  Future<void> _persistLocale(Locale locale) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('locale', locale.languageCode);
   }
 
   @override
