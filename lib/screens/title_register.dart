@@ -21,6 +21,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
 import '../utils/format.dart';
 import '../widgets/searchable_dropdown.dart';
+import '../widgets/register_ui.dart';
 
 final ProvinceCache provinceCache = ProvinceCache();
 
@@ -548,46 +549,18 @@ class TitleRegisterState extends State<TitleRegister> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Align(
-                              alignment: AlignmentDirectional.centerStart,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.md,
-                                    vertical: AppSpacing.sm),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.08),
-                                  borderRadius:
-                                      BorderRadius.circular(AppRadius.xl),
-                                  border: Border.all(
-                                      color: AppColors.primary
-                                          .withOpacity(0.25)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.shopping_cart_outlined,
-                                        size: 20, color: AppColors.primary),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Text(
-                                      '$cartCount',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: CartChip(
+                                count: cartCount,
+                                label: isEnglish ? 'Cart' : 'السلة',
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.lg),
-                            Text(
-                              S.of(context).province,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
+                            const SizedBox(height: AppSpacing.md),
+                            SectionHeader(
+                              label: isEnglish ? 'Location' : 'الموقع',
+                              icon: Icons.location_on_outlined,
                             ),
-                            const SizedBox(height: 6),
+                            FieldLabel(S.of(context).province),
                             SearchableDropdown(
                               hint: S.of(context).selectProvince,
                               searchHint: isEnglish
@@ -609,15 +582,7 @@ class TitleRegisterState extends State<TitleRegister> {
                               },
                             ),
                             const SizedBox(height: 16),
-                            Text(
-                              S.of(context).caza,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
+                            FieldLabel(S.of(context).caza),
                             SearchableDropdown(
                               hint: S.of(context).selectCaza,
                               searchHint:
@@ -641,15 +606,7 @@ class TitleRegisterState extends State<TitleRegister> {
                               },
                             ),
                             const SizedBox(height: 16),
-                            Text(
-                              S.of(context).cadastralZone,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
+                            FieldLabel(S.of(context).cadastralZone),
                             SearchableDropdown(
                               hint: S.of(context).selectCadastralZone,
                               searchHint: isEnglish
@@ -670,7 +627,13 @@ class TitleRegisterState extends State<TitleRegister> {
                                 });
                               },
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.lg),
+                            SectionHeader(
+                              label: isEnglish
+                                  ? 'Property details'
+                                  : 'تفاصيل العقار',
+                              icon: Icons.description_outlined,
+                            ),
                             Form(
                               key: _formKey,
                               child: Column(
@@ -760,7 +723,13 @@ class TitleRegisterState extends State<TitleRegister> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          const SizedBox(height: 8),
+                                          const SizedBox(height: AppSpacing.md),
+                                          SectionHeader(
+                                            label: isEnglish
+                                                ? 'Basket'
+                                                : 'السلة',
+                                            icon: Icons.shopping_cart_outlined,
+                                          ),
                                           ListView.builder(
                                             shrinkWrap: true,
                                             physics:
@@ -896,45 +865,10 @@ class TitleRegisterState extends State<TitleRegister> {
                                             },
                                           ),
                                           const SizedBox(height: 16),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: AppSpacing.md,
-                                                vertical: AppSpacing.md),
-                                            decoration: BoxDecoration(
-                                              gradient: const LinearGradient(
-                                                colors: [
-                                                  AppColors.danger,
-                                                  AppColors.dangerDark,
-                                                ],
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                      AppRadius.lg),
-                                              boxShadow: AppShadows.subtle,
-                                            ),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Text(
-                                                  S.of(context).total,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  formatAmount(
-                                                      calculateTotalCost()),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 18,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                          SummaryBar(
+                                            label: S.of(context).total,
+                                            amount: formatAmount(
+                                                calculateTotalCost()),
                                           ),
                                         ],
                                       )

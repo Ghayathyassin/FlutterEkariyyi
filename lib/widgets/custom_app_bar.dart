@@ -23,12 +23,12 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       elevation: 0,
       scrolledUnderElevation: 0,
       systemOverlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: AppColors.primary,
+        statusBarColor: AppColors.primaryDark,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
       flexibleSpace: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: kPrimaryGradient,
           boxShadow: AppShadows.subtle,
         ),

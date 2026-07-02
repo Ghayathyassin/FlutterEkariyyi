@@ -27,15 +27,9 @@ flutter test                         # unit/widget tests (test/ dir)
 flutter test test/foo_test.dart      # a single test file
 ```
 
-### Localization is generated and must be regenerated after editing strings
+### Localization — DO NOT run `intl_utils:generate` on this project
 
-UI strings use `S.of(context).<key>` from `lib/generated/l10n.dart`, which is produced by **`intl_utils`** from the ARB files in `lib/l10n/` (`app_en.arb`, `app_ar.arb`). After editing an ARB file, regenerate:
-
-```bash
-dart run intl_utils:generate
-```
-
-Do not hand-edit anything under `lib/generated/`. Supported locales are `en` and `ar` only; locale is held in `MyApp` state and threaded everywhere as an `onLocaleChange(Locale)` callback.
+UI strings use `S.of(context).<key>` from `lib/generated/l10n.dart`, produced by **`intl_utils`** from the ARB files in `lib/l10n/` (`app_en.arb`, `app_ar.arb`). **`dart run intl_utils:generate` is BROKEN here and destructive** — it creates a stray `lib/l10n/intl_en.arb`, overwrites `l10n.dart`/`messages_en.dart`, and DELETES `messages_ar.dart`, causing ~280 analyzer errors + a "Multiple arb files with the same 'en' locale" runtime crash. To change a string, **hand-edit BOTH** the ARB file AND the matching generated `lib/generated/intl/messages_<locale>.dart` (add the getter to `l10n.dart` too if the key is new). Localization changes require a **hot restart**, not hot reload. Supported locales are `en`/`ar` only; locale lives in `MyApp` state, threaded as `onLocaleChange(Locale)`.
 
 ## Architecture
 
@@ -57,7 +51,18 @@ Per-feature cache classes in `lib/models/` (`province_cache`, `fee_cache`, `paid
 
 ### Design system — do not hardcode styling
 
-`lib/theme/app_theme.dart` is the single source of styling: `AppColors` (brand green `#006401`, danger red `#8c0000`, accents `info`/`amber`, drawer colors, `tint()`), `AppSpacing`, `AppRadius`, `AppShadows`, `kPrimaryGradient`, `AppButtons`, `AppType` (type scale), and `AppTheme.light` (Material 3). Restyle against these tokens; do not introduce raw colors or ad-hoc text styles. The brand palette is fixed even across redesigns.
+`lib/theme/app_theme.dart` is the single source of styling: `AppColors` (fixed brand green `#006401`, danger red `#8c0000`, confirm green `#1b8a3a`, accents `info`/`amber`, drawer colors, tints `greenTint`/`blueTint`/`amberTint`/`redTint`, `tintFor()`), `AppSpacing`, `AppRadius` (8 field / 12 button / 16 card / 20 banner / 999 pill), `AppShadows` (e0 border / e1 card / e2 sheet), `kPrimaryGradient`, `AppButtons` (**danger()=red CTA, primary()/confirm()=green confirm, neutral()=grey reset**), `AppType` (IBM Plex scale; `AppType.mono(...)` for tabular numbers). **`AppTheme.light({required bool isArabic})` is now a FUNCTION** (was a getter) — `main.dart` calls `AppTheme.light(isArabic: _locale.languageCode == 'ar')` so the base font family swaps to IBM Plex Sans Arabic in RTL. Signature painters live in `lib/theme/app_decor.dart` (`CadastralLines`, `CornerTicks`, `CornerMark`, `SurveyBaseline`, `StageState`/`stageFromCode`); shared UI atoms in `lib/widgets/register_ui.dart` (`FieldLabel`, `SectionHeader`, `CartChip`, `SummaryBar`, `StageChip`, `StageLegend`, `RegisterCard`); motion in `lib/theme/app_motion.dart` (`AppReveal`, `Pressable`, `revealStagger`, honours OS reduce-motion). Restyle against these tokens; never hardcode raw colors/text styles. The brand palette is fixed across all redesigns (only neutrals may be tuned).
+
+### Current UI: "The Cadastral Line" redesign (IN WORKING TREE, uncommitted)
+
+The app has been fully reskinned per a Claude Design spec — concept **"The Cadastral Line"** (calm, document-like; signature = survey linework/corner-ticks/survey-baseline). The spec bundle is at `design_handoff/redesign/design_handoff_lrc_redesign/` (`README.md` = engineering spec, `LRC Redesign Spec.dc.html` = visual board). All 12 screens are done and `flutter analyze` is clean, but it is **NOT committed** — it awaits on-device testing before commit/push. Fonts (IBM Plex Sans / Sans Arabic / Mono) come from the **`google_fonts`** dependency: they are **fetched from Google at first launch (needs network once) then cached** — a fallback font briefly shows on the very first run.
+
+**Git restore points (tags, both pushed to origin):**
+- `ui-classic-baseline` (commit `d0f4abd`) — pre-animation static UI.
+- `ui-animated-checkpoint` (commit `3fd0742`) — animated design, the base this redesign sits on.
+- To revert the redesign: `git reset --hard ui-animated-checkpoint`, then delete `lib/theme/app_decor.dart` + `lib/widgets/register_ui.dart` and remove `google_fonts` from pubspec.
+
+The design brief/prompt handed to Claude Design also live in `design_handoff/` (`APP_DESIGN_BRIEF.md`, `DESIGN_PROMPT.md`).
 
 ### Shared widgets (`lib/widgets/`)
 

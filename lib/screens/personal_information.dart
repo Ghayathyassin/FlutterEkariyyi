@@ -18,6 +18,7 @@ import '../generated/l10n.dart';
 import '../models/transaction_code.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/register_ui.dart';
 
 class PersonalInformation extends StatefulWidget {
   final int cartCount;
@@ -479,15 +480,10 @@ class PersonalInformationState extends State<PersonalInformation>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          isEnglish ? 'Payment method' : 'طريقة الدفع',
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
+        SectionHeader(
+          label: isEnglish ? 'Payment method' : 'طريقة الدفع',
+          icon: Icons.credit_card_outlined,
         ),
-        const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
             Expanded(
@@ -539,12 +535,10 @@ class PersonalInformationState extends State<PersonalInformation>
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: selected
-              ? AppColors.primary.withOpacity(0.06)
-              : AppColors.surface,
+          color: selected ? AppColors.greenTint : AppColors.surface,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? AppColors.primary : AppColors.line,
             width: selected ? 2 : 1,
           ),
           boxShadow: selected ? AppShadows.subtle : null,
@@ -573,7 +567,7 @@ class PersonalInformationState extends State<PersonalInformation>
                 ),
                 Icon(
                   selected
-                      ? Icons.radio_button_checked
+                      ? Icons.check_circle_rounded
                       : Icons.radio_button_unchecked,
                   size: 20,
                   color: selected ? AppColors.primary : AppColors.neutral,
@@ -661,14 +655,24 @@ class PersonalInformationState extends State<PersonalInformation>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _cartChip(),
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: CartChip(
+                          count: widget.cartCount,
+                          label: isEnglish ? 'Cart' : 'السلة',
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.md),
+                      SectionHeader(
+                        label: isEnglish ? 'Applicant' : 'مقدّم الطلب',
+                        icon: Icons.person_outline,
+                      ),
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(AppRadius.lg),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: AppColors.line),
                           boxShadow: AppShadows.subtle,
                         ),
                         child: Column(
@@ -912,30 +916,4 @@ class PersonalInformationState extends State<PersonalInformation>
     );
   }
 
-  Widget _cartChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.shopping_cart_outlined,
-              size: 20, color: AppColors.primary),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            '${widget.cartCount}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

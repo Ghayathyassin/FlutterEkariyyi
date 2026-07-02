@@ -168,7 +168,7 @@ class MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
+      theme: AppTheme.light(isArabic: _locale.languageCode == 'ar'),
       routes: {
         '/index': (context) => Index(
               onLocaleChange: _setLocale,

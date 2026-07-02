@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:auto_size_text/auto_size_text.dart';
+import '../theme/app_decor.dart';
+import 'register_ui.dart';
 
+/// One stage in a transaction/ownership track. Renders the spec's stage chip
+/// (tinted card + state glyph + caption). Colour codes (unchanged from the
+/// backend): 1 = pending, 2 = in‑progress, 3 = done.
+///
+/// Callers still wrap this in [Expanded] inside a Row.
 class StageBlock extends StatelessWidget {
   final String title;
   final String colorCode;
@@ -11,47 +17,8 @@ class StageBlock extends StatelessWidget {
     super.key,
   });
 
-  Color getColor(String colorCode) {
-    switch (colorCode) {
-      case '1':
-        return const Color(0xFF6F6F6F);
-      case '2':
-        return const Color(0xFFFFC000);
-      case '3':
-        return const Color(0xff006401);
-      default:
-        return const Color(0xFF6F6F6F);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = getColor(colorCode);
-
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          height: 60,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-        ),
-        const SizedBox(height: 8.0),
-        AutoSizeText(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
-          maxLines: 2,
-          minFontSize: 8,
-          maxFontSize: 11,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
+    return StageChip(title: title, state: stageFromCode(colorCode));
   }
 }

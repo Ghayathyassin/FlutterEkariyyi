@@ -9,7 +9,9 @@ import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:flutter_application_1/widgets/stage_blocks.dart';
-import 'package:flutter_application_1/widgets/status_indicator.dart';
+import 'package:flutter_application_1/widgets/register_ui.dart';
+import '../theme/app_theme.dart';
+import '../theme/app_decor.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
@@ -243,19 +245,6 @@ class TransactionTrackingState extends State<TransactionTracking> {
     final locale = Localizations.localeOf(context);
     final isEnglish = locale.languageCode == 'en';
 
-    Color getColor(String colorCode) {
-      switch (colorCode) {
-        case '1':
-          return const Color(0xFF6F6F6F);
-        case '2':
-          return const Color(0xFFFFC000);
-        case '3':
-          return const Color(0xff006401);
-        default:
-          return const Color(0xFF6F6F6F);
-      }
-    }
-
     // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
@@ -287,11 +276,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
                       if (_isLoading)
                         const Center(child: CircularProgressIndicator()),
                       if (!_isLoading) ...[
-                        Text(
-                          S.of(context).areaOffice,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        const SizedBox(height: 6.0),
+                        FieldLabel(S.of(context).areaOffice),
                         DropdownButtonFormField<String>(
                           hint: Text(S.of(context).selectAreaOffice),
                           value: _selectedAreaOffice,
@@ -317,11 +302,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           },
                         ),
                         const SizedBox(height: 16.0),
-                        Text(
-                          S.of(context).applicationDate,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        const SizedBox(height: 6.0),
+                        FieldLabel(S.of(context).applicationDate),
                         TextField(
                           controller: _dateController,
                           readOnly: true,
@@ -331,11 +312,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
                           onTap: () => _selectDate(context),
                         ),
                         const SizedBox(height: 16.0),
-                        Text(
-                          S.of(context).applicationNo,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        const SizedBox(height: 6.0),
+                        FieldLabel(S.of(context).applicationNo),
                         TextField(
                           controller: _appNoController,
                           keyboardType: TextInputType.number,
@@ -345,37 +322,48 @@ class TransactionTrackingState extends State<TransactionTracking> {
                         ),
                         const SizedBox(height: 16.0),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF8C0000),
-                                foregroundColor: Colors.white,
+                            Expanded(
+                              child: ElevatedButton(
+                                style: AppButtons.neutral(),
+                                onPressed: _resetFields,
+                                child: Text(S.of(context).reset),
                               ),
-                              onPressed: _trackTransaction,
-                              child: Text(S.of(context).showResult),
                             ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF6F6F6F),
-                                foregroundColor: Colors.white,
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                style: AppButtons.danger(),
+                                onPressed: _trackTransaction,
+                                child: Text(S.of(context).showResult),
                               ),
-                              onPressed: _resetFields,
-                              child: Text(S.of(context).reset),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 40.0),
-                        const StatusIndicator(),
-                        const SizedBox(height: 16.0),
+                        const SizedBox(height: AppSpacing.lg),
+                        StageLegend(
+                          pending: isEnglish ? 'Pending' : 'قيد الانتظار',
+                          inProgress: isEnglish ? 'In progress' : 'قيد التنفيذ',
+                          done: isEnglish ? 'Done' : 'منجز',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
                         if (_transactionDetails.isNotEmpty) ...[
-                          LinearProgressIndicator(
-                            value: (_transactionDetails['P_perc'] ?? 0) / 100,
-                            backgroundColor: Colors.grey.shade300,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              getColor(
-                                  _transactionDetails['prog_color'] ?? '1'),
-                            ),
+                          SurveyBaseline(
+                            progress: (((_transactionDetails['P_perc'] ?? 0)
+                                        as num)
+                                    .toDouble()) /
+                                100,
+                            states: [
+                              stageFromCode(
+                                  _transactionDetails['rao_color']?.toString()),
+                              stageFromCode(
+                                  _transactionDetails['reg_color']?.toString()),
+                              stageFromCode(
+                                  _transactionDetails['rec_color']?.toString()),
+                              stageFromCode(
+                                  _transactionDetails['areg_color']?.toString()),
+                            ],
                           ),
                           const SizedBox(height: 16.0),
                           Row(

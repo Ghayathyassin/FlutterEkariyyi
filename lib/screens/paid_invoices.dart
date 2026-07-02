@@ -16,7 +16,9 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
+import '../widgets/register_ui.dart';
 
 const storage = FlutterSecureStorage();
 
@@ -456,24 +458,25 @@ class PaidInvoicesState extends State<PaidInvoices> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              S.of(context).province,
-                              style: const TextStyle(fontSize: 12),
+                            SectionHeader(
+                              label: isEnglish ? 'Location' : 'الموقع',
+                              icon: Icons.location_on_outlined,
                             ),
+                            FieldLabel(S.of(context).province),
                             _buildProvinceDropdown(),
                             const SizedBox(height: 16),
-                            Text(
-                              S.of(context).caza,
-                              style: const TextStyle(fontSize: 12),
-                            ),
+                            FieldLabel(S.of(context).caza),
                             _buildCazaDropdown(),
                             const SizedBox(height: 16),
-                            Text(
-                              S.of(context).cadastralZone,
-                              style: const TextStyle(fontSize: 12),
-                            ),
+                            FieldLabel(S.of(context).cadastralZone),
                             _buildCadastralZoneDropdown(),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.lg),
+                            SectionHeader(
+                              label: isEnglish
+                                  ? 'Search details'
+                                  : 'تفاصيل البحث',
+                              icon: Icons.search_rounded,
+                            ),
                             _buildForm(),
                             if (validationMessage != null &&
                                 validationMessage!.trim().isNotEmpty)
@@ -736,18 +739,24 @@ class PaidInvoicesState extends State<PaidInvoices> {
         ? const Center(child: CircularProgressIndicator())
         : storedInvoice != null && storedInvoice!.isNotEmpty
             ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  SectionHeader(
+                    label: Localizations.localeOf(context).languageCode == 'en'
+                        ? 'Results'
+                        : 'النتائج',
+                    icon: Icons.description_outlined,
+                  ),
                   Padding(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                     child: Text(
                       S
                           .of(context)
                           .theInvoiceOfTheLastTransactionWillBeDisplayed,
-                      style: const TextStyle(
-                          color: Colors.black, fontWeight: FontWeight.bold),
+                      style: AppType.caption,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.sm),
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),

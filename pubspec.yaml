@@ -28,6 +28,7 @@ dependencies:
   googleapis: ^13.1.0
   googleapis_auth: ^1.4.1
   flutter_local_notifications: ^17.2.3
+  google_fonts: ^4.0.4
 
 
 dev_dependencies:

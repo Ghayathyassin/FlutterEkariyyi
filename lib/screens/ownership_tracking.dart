@@ -5,7 +5,9 @@ import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/stage_blocks.dart';
-import 'package:flutter_application_1/widgets/status_indicator.dart';
+import 'package:flutter_application_1/widgets/register_ui.dart';
+import '../theme/app_theme.dart';
+import '../theme/app_decor.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
@@ -226,19 +228,6 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
     final locale = Localizations.localeOf(context);
     final isEnglish = locale.languageCode == 'en';
 
-    Color getColor(String colorCode) {
-      switch (colorCode) {
-        case '1':
-          return const Color(0xFF6F6F6F);
-        case '2':
-          return const Color(0xFFFFC000);
-        case '3':
-          return const Color(0xff006401);
-        default:
-          return const Color(0xFF6F6F6F);
-      }
-    }
-
     void onRequestTypeChanged(String? newValue) {
       setState(() {
         _selectedRequestType = newValue;
@@ -286,11 +275,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                         if (isLoading)
                           const Center(child: CircularProgressIndicator())
                         else ...[
-                          Text(
-                            S.of(context).requestType,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          const SizedBox(height: 6.0),
+                          FieldLabel(S.of(context).requestType),
                           DropdownButtonFormField<String>(
                             hint: Text(S.of(context).requestType),
                             value: _selectedRequestType,
@@ -307,11 +292,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             onChanged: onRequestTypeChanged,
                           ),
                           const SizedBox(height: 16.0),
-                          Text(
-                            S.of(context).requestDate,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          const SizedBox(height: 6.0),
+                          FieldLabel(S.of(context).requestDate),
                           TextField(
                             controller: _dateController,
                             readOnly: true,
@@ -321,11 +302,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                             onTap: onDateFieldTap,
                           ),
                           const SizedBox(height: 16.0),
-                          Text(
-                            S.of(context).requestNo,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          const SizedBox(height: 6.0),
+                          FieldLabel(S.of(context).requestNo),
                           TextField(
                             controller: _requestNoController,
                             keyboardType: TextInputType.number,
@@ -334,40 +311,53 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
                           ),
                           const SizedBox(height: 16.0),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF8C0000),
-                                  foregroundColor: Colors.white,
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: AppButtons.neutral(),
+                                  onPressed: onResetFieldsPressed,
+                                  child: Text(S.of(context).reset),
                                 ),
-                                onPressed: onShowResultPressed,
-                                child: Text(S.of(context).showResult),
                               ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF6F6F6F),
-                                  foregroundColor: Colors.white,
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                flex: 2,
+                                child: ElevatedButton(
+                                  style: AppButtons.danger(),
+                                  onPressed: onShowResultPressed,
+                                  child: Text(S.of(context).showResult),
                                 ),
-                                onPressed: onResetFieldsPressed,
-                                child: Text(S.of(context).reset),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 40.0),
-                          const StatusIndicator(),
-                          const SizedBox(height: 16.0),
+                          const SizedBox(height: AppSpacing.lg),
+                          StageLegend(
+                            pending: isEnglish ? 'Pending' : 'قيد الانتظار',
+                            inProgress: isEnglish ? 'In progress' : 'قيد التنفيذ',
+                            done: isEnglish ? 'Done' : 'منجز',
+                          ),
+                          const SizedBox(height: AppSpacing.md),
                           if (_ownershipTransactionDetails.isNotEmpty) ...[
-                            LinearProgressIndicator(
-                              value: (_ownershipTransactionDetails['P_perc'] ??
-                                      0) /
+                            SurveyBaseline(
+                              progress: (((_ownershipTransactionDetails[
+                                                  'P_perc'] ??
+                                              0) as num)
+                                          .toDouble()) /
                                   100,
-                              backgroundColor: Colors.grey.shade300,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                getColor(_ownershipTransactionDetails[
-                                        'prog_color'] ??
-                                    '1'),
-                              ),
+                              states: [
+                                stageFromCode(_ownershipTransactionDetails[
+                                        'RCP_color']
+                                    ?.toString()),
+                                stageFromCode(_ownershipTransactionDetails[
+                                        'OFF_color']
+                                    ?.toString()),
+                                stageFromCode(_ownershipTransactionDetails[
+                                        'APRV_color']
+                                    ?.toString()),
+                                stageFromCode(_ownershipTransactionDetails[
+                                        'CERT_color']
+                                    ?.toString()),
+                              ],
                             ),
                             const SizedBox(height: 16.0),
                             Row(

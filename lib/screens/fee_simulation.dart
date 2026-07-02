@@ -13,6 +13,7 @@ import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
 import '../utils/format.dart';
+import '../widgets/register_ui.dart';
 
 /// Fee simulation. The fee CALCULATIONS are ported 1:1 from the LRC VB.NET
 /// `API_Fees_calculator_ar` (`tr_calc`) — constants, formulas and the
@@ -562,30 +563,28 @@ class FeesSimulationState extends State<FeesSimulation> {
       return Container(
         width: double.infinity,
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.danger, AppColors.dangerDark],
-          ),
+          color: AppColors.greenTint,
+          border: Border(top: BorderSide(color: Color(0xffcfe3cf))),
         ),
         padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.md),
+            horizontal: AppSpacing.md, vertical: 14),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               fee['Fee'] ?? '',
               style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
               ),
             ),
             Text(
               formatAmountString(fee['Value']),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              style: AppType.mono(
+                  fontSize: 16,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -594,29 +593,23 @@ class FeesSimulationState extends State<FeesSimulation> {
 
     return Container(
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border: Border(bottom: BorderSide(color: AppColors.line)),
       ),
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+          horizontal: AppSpacing.md, vertical: 13),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Text(
               fee['Fee'] ?? '',
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppType.body.copyWith(color: AppColors.textSecondary),
             ),
           ),
           const SizedBox(width: AppSpacing.md),
           Text(
             formatAmountString(fee['Value']),
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: AppType.mono(fontSize: 15),
           ),
         ],
       ),
@@ -669,10 +662,7 @@ class FeesSimulationState extends State<FeesSimulation> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
-                          S.of(context).transactionType,
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                        FieldLabel(S.of(context).transactionType),
                         DropdownButtonFormField<String>(
                           hint: Text(S.of(context).selectTransactionType),
                           value: _selectedTransactionType,
@@ -691,7 +681,7 @@ class FeesSimulationState extends State<FeesSimulation> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(S.of(context).valueL),
+                              FieldLabel(S.of(context).valueL),
                               TextField(
                                 controller: _valueController,
                                 keyboardType: TextInputType.number,
@@ -739,14 +729,21 @@ class FeesSimulationState extends State<FeesSimulation> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16.0),
-                        if (_feesTable != null)
+                        const SizedBox(height: AppSpacing.lg),
+                        if (_feesTable != null) ...[
+                          SectionHeader(
+                            label: isEnglish
+                                ? 'Fee breakdown'
+                                : 'تفصيل الرسوم',
+                            icon: Icons.receipt_long_outlined,
+                            accent: AppColors.danger,
+                          ),
                           Container(
                             key: ValueKey(_calcSeq),
                             decoration: BoxDecoration(
                               color: AppColors.surface,
                               borderRadius: BorderRadius.circular(AppRadius.lg),
-                              border: Border.all(color: AppColors.border),
+                              border: Border.all(color: AppColors.line),
                               boxShadow: AppShadows.card,
                             ),
                             clipBehavior: Clip.antiAlias,
@@ -755,7 +752,7 @@ class FeesSimulationState extends State<FeesSimulation> {
                                 for (int i = 0; i < _feesTable!.length; i++)
                                   AppReveal(
                                     delay: AppMotion.stagger * i,
-                                    dy: 12,
+                                    dy: 8,
                                     child: _buildFeeRow(
                                       _feesTable![i],
                                       i == _feesTable!.length - 1,
@@ -764,14 +761,33 @@ class FeesSimulationState extends State<FeesSimulation> {
                               ],
                             ),
                           ),
+                        ],
                         if (_message != null) ...[
                           const SizedBox(height: 16.0),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Text(
-                              textAlign: TextAlign.justify,
-                              _message!,
-                              style: const TextStyle(color: Colors.red),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(AppSpacing.smd),
+                            decoration: BoxDecoration(
+                              color: AppColors.amberTint,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.md),
+                              border: Border.all(
+                                  color: AppColors.amber.withOpacity(0.35)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.info_outline_rounded,
+                                    size: 18, color: AppColors.amberText),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    _message!,
+                                    textAlign: TextAlign.justify,
+                                    style: AppType.caption.copyWith(height: 1.5),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

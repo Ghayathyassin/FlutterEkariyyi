@@ -1,7 +1,6 @@
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../models/drawer_state.dart';
@@ -11,14 +10,15 @@ import '../theme/app_motion.dart';
 class SideDrawer extends StatelessWidget {
   const SideDrawer({super.key});
 
+  // Material Symbols set per the redesign spec.
   static const List<IconData> drawerIcons = [
-    Icons.home_outlined,
-    FontAwesomeIcons.filePen,
-    FontAwesomeIcons.listCheck,
-    Icons.calculate_outlined,
-    FontAwesomeIcons.pencil,
-    FontAwesomeIcons.streetView,
-    Icons.receipt_long_outlined,
+    Icons.home_rounded,
+    Icons.menu_book_rounded,
+    Icons.fact_check_outlined,
+    Icons.calculate_rounded,
+    Icons.edit_document,
+    Icons.vpn_key_outlined,
+    Icons.receipt_long_rounded,
   ];
 
   @override
@@ -81,8 +81,8 @@ class SideDrawer extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final bool isSelected = drawerState.selectedIndex == index;
                   final Color fg = isSelected
-                      ? AppColors.drawerSelected
-                      : Colors.white.withOpacity(0.82);
+                      ? Colors.white
+                      : const Color(0xffc7ccd1);
 
                   return AppReveal(
                     delay: Duration(milliseconds: 45 * index),
@@ -92,7 +92,7 @@ class SideDrawer extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 3),
                     child: Material(
                       color: isSelected
-                          ? AppColors.drawerSelected.withOpacity(0.16)
+                          ? AppColors.drawerSelected.withOpacity(0.18)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       child: InkWell(
@@ -102,11 +102,27 @@ class SideDrawer extends StatelessWidget {
                           _navigateToScreen(context, index);
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 13),
+                          padding: const EdgeInsetsDirectional.only(
+                              end: 14, top: 12, bottom: 12),
                           child: Row(
                             children: [
-                              Icon(drawerIcons[index], color: fg, size: 21),
+                              // 3dp active survey-rule on the start edge.
+                              Container(
+                                width: 3,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.drawerSelected
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Icon(drawerIcons[index],
+                                  color: isSelected
+                                      ? AppColors.drawerSelected
+                                      : fg,
+                                  size: 21),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Text(

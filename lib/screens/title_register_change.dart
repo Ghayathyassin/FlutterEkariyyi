@@ -6,6 +6,8 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
+import '../theme/app_theme.dart';
+import '../widgets/register_ui.dart';
 
 class TitleRegisterChange extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -19,6 +21,8 @@ class _TitleRegisterChangeState extends State<TitleRegisterChange> {
   final TextEditingController _usernameController = TextEditingController();
 
   final TextEditingController _passwordController = TextEditingController();
+
+  bool _obscure = true;
 
   void _navigateTo(BuildContext context, int index, String route) {
     Provider.of<DrawerState>(context, listen: false).setSelectedIndex(index);
@@ -61,62 +65,100 @@ class _TitleRegisterChangeState extends State<TitleRegisterChange> {
             children: [
               CustomHeader(title: S.of(context).titleRegisterChanges),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _usernameController,
-                        decoration: InputDecoration(
-                          labelText: S.of(context).username,
-                        ),
-                      ),
-                      const SizedBox(height: 16.0),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: S.of(context).password,
-                        ),
-                      ),
-                      const SizedBox(height: 16.0),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ButtonStyle(
-                            backgroundColor: WidgetStateProperty.all<Color>(
-                                const Color(0xff8c0000)),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: AppSpacing.lg),
+                          Center(
+                            child: Container(
+                              width: 64,
+                              height: 64,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.greenTint,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.lg),
+                              ),
+                              child: const Icon(Icons.edit_document,
+                                  size: 30, color: AppColors.primary),
+                            ),
                           ),
-                          onPressed: () {},
-                          child: Text(
-                            S.of(context).login,
-                            style: const TextStyle(color: Colors.white),
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            isEnglish ? 'Sign in' : 'تسجيل الدخول',
+                            textAlign: TextAlign.center,
+                            style: AppType.h1,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16.0),
-                      GestureDetector(
-                        onTap: () {},
-                        child: Text(
-                          S.of(context).forgerPassword,
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            isEnglish
+                                ? 'Access title‑register changes'
+                                : 'الدخول لتعديل القيود',
+                            textAlign: TextAlign.center,
+                            style: AppType.bodyMuted,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16.0),
-                      GestureDetector(
-                        onTap: () {},
-                        child: Text(
-                          S.of(context).register,
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
+                          const SizedBox(height: AppSpacing.xl),
+                          FieldLabel(S.of(context).username),
+                          TextField(
+                            controller: _usernameController,
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: AppSpacing.md),
+                          FieldLabel(S.of(context).password),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: _obscure,
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined),
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          ElevatedButton(
+                            style: AppButtons.danger(),
+                            onPressed: () {},
+                            child: Text(S.of(context).login),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GestureDetector(
+                                onTap: () {},
+                                child: Text(
+                                  S.of(context).forgerPassword,
+                                  style: const TextStyle(
+                                      color: AppColors.info,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {},
+                                child: Text(
+                                  S.of(context).register,
+                                  style: const TextStyle(
+                                      color: AppColors.info,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               )

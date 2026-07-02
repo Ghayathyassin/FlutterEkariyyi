@@ -25,50 +25,48 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool rtl = Directionality.of(context) == TextDirection.rtl;
     return Container(
-      height: 60,
+      height: 56,
       width: double.infinity,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(
-          bottom: BorderSide(color: AppColors.border),
+          bottom: BorderSide(color: AppColors.line),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      padding: const EdgeInsetsDirectional.only(start: 6, end: AppSpacing.md),
       child: AppReveal(
         dy: -6,
         child: Row(
-        children: [
-          Material(
-            color: AppColors.scaffold,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              onTap: () => _onBack(context),
-              child: const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(Icons.arrow_back,
-                    size: 22, color: AppColors.textPrimary),
+          children: [
+            Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => _onBack(context),
+                child: Padding(
+                  padding: const EdgeInsets.all(10.0),
+                  child: Icon(
+                    rtl ? Icons.arrow_forward_rounded : Icons.arrow_back_rounded,
+                    size: 22,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              title,
-              style: AppType.h2,
-              overflow: TextOverflow.ellipsis,
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(title, style: AppType.h2, overflow: TextOverflow.ellipsis),
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-      ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+        ),
       ),
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize => const Size.fromHeight(56);
 }

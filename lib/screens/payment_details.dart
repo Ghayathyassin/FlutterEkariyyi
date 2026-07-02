@@ -6,6 +6,8 @@ import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_decor.dart';
+import '../widgets/register_ui.dart';
 
 class PaymentDetails extends StatelessWidget {
   final Function(Locale) onLocaleChange;
@@ -59,7 +61,15 @@ class PaymentDetails extends StatelessWidget {
                 child: Column(
                   children: [
                     _confirmationBanner(isEnglish),
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.lg),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: SectionHeader(
+                        label: isEnglish ? 'Order record' : 'سجل الطلب',
+                        icon: Icons.receipt_long_outlined,
+                      ),
+                    ),
+                    Stack(children: [
                     CustomCardWidgetRow(
                       content: [
                         {'title': 'ID', 'description': id},
@@ -80,6 +90,13 @@ class PaymentDetails extends StatelessWidget {
                         },
                       ],
                     ),
+                    const Positioned.fill(
+                      child: IgnorePointer(
+                        child: CornerTicks(
+                            color: AppColors.primary, length: 12, inset: 8),
+                      ),
+                    ),
+                    ]),
                     const SizedBox(height: AppSpacing.xl),
                     SizedBox(
                       width: double.infinity,

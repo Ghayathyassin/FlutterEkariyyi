@@ -8,7 +8,6 @@ import 'package:flutter_application_1/widgets/side_drawer.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class Index extends StatelessWidget {
   final Function(Locale) onLocaleChange;
@@ -23,100 +22,59 @@ class Index extends StatelessWidget {
     Navigator.pushReplacementNamed(context, route);
   }
 
-  // The custom "L.L" mark used for the Paid Invoices tile.
-  Widget _llShape(double size) {
-    Widget singleL() => Expanded(
-          child: Stack(
-            children: [
-              Align(
-                alignment: Alignment.topLeft,
-                child: Container(
-                  width: size * 0.15,
-                  height: size,
-                  color: AppColors.primary,
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: Container(
-                  width: size * 0.4,
-                  height: size * 0.15,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        );
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          singleL(),
-          const SizedBox(width: 2),
-          Expanded(
-            child: Align(
-              alignment: Alignment.bottomRight,
-              child: Container(width: 4, height: 4, color: AppColors.primary),
-            ),
-          ),
-          const SizedBox(width: 2),
-          singleL(),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context);
     final isEnglish = locale.languageCode == 'en';
     final width = MediaQuery.of(context).size.width;
-    final bool wide = width > 600;
-    final double pad = wide ? 32 : 20;
+    final bool wide = width >= 600;
+    final double pad = wide ? 24 : 16;
+    final int crossAxisCount = wide ? 3 : 2;
 
     final categories = <Widget>[
       Category(
         function: () => _navigateTo(context, 1, '/titleRegister'),
         title: S.of(context).titleRegister,
-        icon: FontAwesomeIcons.filePen,
+        description: isEnglish ? 'Request property records' : 'طلب بيانات عقارية',
+        icon: Icons.menu_book_rounded,
         accent: AppColors.primary,
       ),
       Category(
         function: () => _navigateTo(context, 2, '/transactionTracking'),
         title: S.of(context).transactionTracking,
-        icon: FontAwesomeIcons.listCheck,
+        description: isEnglish ? 'Track your application' : 'تتبّع معاملتك',
+        icon: Icons.fact_check_outlined,
         accent: AppColors.info,
       ),
       Category(
         function: () => _navigateTo(context, 4, '/titleRegisterChange'),
         title: S.of(context).titleRegisterChanges,
-        icon: FontAwesomeIcons.pencil,
+        description: isEnglish ? 'Sign in to manage' : 'تسجيل الدخول للتعديل',
+        icon: Icons.edit_document,
         accent: AppColors.amber,
       ),
       Category(
         function: () => _navigateTo(context, 3, '/feesSimulation'),
         title: S.of(context).feesSimulation,
-        icon: Icons.calculate_outlined,
+        description: isEnglish ? 'Estimate fees' : 'احتساب الرسوم',
+        icon: Icons.calculate_rounded,
         accent: AppColors.danger,
       ),
       Category(
         function: () => _navigateTo(context, 5, '/ownershipTracking'),
         title: S.of(context).ownershipReqTracking,
-        icon: FontAwesomeIcons.streetView,
+        description: isEnglish ? 'Track ownership request' : 'تتبّع طلب الملكية',
+        icon: Icons.vpn_key_outlined,
         accent: AppColors.info,
       ),
       Category(
         function: () => _navigateTo(context, 6, '/paidInvoices'),
         title: S.of(context).paidInvoices,
-        customIcon: _llShape(28),
+        description: isEnglish ? 'Find paid invoices' : 'الفواتير المدفوعة',
+        icon: Icons.receipt_long_rounded,
         accent: AppColors.primary,
       ),
     ];
-
-    final int crossAxisCount = wide ? 3 : 2;
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
@@ -136,44 +94,41 @@ class Index extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Home-only welcome banner, flowing straight out of the green
-            // app bar above it (rounded bottom). Eases down on load.
-            AppReveal(dy: -12, child: _buildWelcome(isEnglish, pad)),
+            AppReveal(dy: -8, child: _buildWelcome(isEnglish, pad)),
             Expanded(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                    pad, AppSpacing.lg, pad, AppSpacing.lg),
-                // The grid sizes itself to the available height so all tiles
-                // fit on one screen with no scrolling.
+                padding: EdgeInsets.fromLTRB(pad, AppSpacing.md, pad, pad),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    // Stretch the tiles to fill the available space so the grid
+                    // fits any screen without scrolling: derive the row height
+                    // from the space left below the header.
+                    const double spacing = 14;
                     final int rows =
                         (categories.length / crossAxisCount).ceil();
-                    const spacing = AppSpacing.md;
-                    final double cellWidth = (constraints.maxWidth -
-                            spacing * (crossAxisCount - 1)) /
-                        crossAxisCount;
-                    final double cellHeight =
+                    final double tileExtent =
                         (constraints.maxHeight - spacing * (rows - 1)) / rows;
-                    final double aspect =
-                        cellHeight <= 0 ? 1.0 : cellWidth / cellHeight;
-
-                    return GridView.count(
-                      crossAxisCount: crossAxisCount,
+                    return GridView.builder(
                       physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: spacing,
-                      crossAxisSpacing: spacing,
-                      childAspectRatio: aspect,
-                      // Tiles cascade in after the banner, one stagger step
-                      // apart, for an orchestrated home-screen entrance.
-                      children: [
-                        for (int i = 0; i < categories.length; i++)
-                          AppReveal(
-                            delay: const Duration(milliseconds: 140) +
-                                AppMotion.stagger * i,
-                            child: categories[i],
-                          ),
-                      ],
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        mainAxisExtent: tileExtent,
+                        crossAxisSpacing: spacing,
+                        mainAxisSpacing: spacing,
+                      ),
+                      itemCount: categories.length,
+                      // Reveal the tiles row by row, top to bottom: both tiles
+                      // in a row share the same delay, keyed to the row index,
+                      // so the grid cascades down after the header appears.
+                      itemBuilder: (context, i) {
+                        final int row = i ~/ crossAxisCount;
+                        return AppReveal(
+                          delay: const Duration(milliseconds: 260) +
+                              const Duration(milliseconds: 110) * row,
+                          dy: 18,
+                          child: categories[i],
+                        );
+                      },
                     );
                   },
                 ),
@@ -186,37 +141,54 @@ class Index extends StatelessWidget {
   }
 
   Widget _buildWelcome(bool isEnglish, double pad) {
+    // Arabic script is cursive — letter‑spacing splits the joined glyphs and
+    // reads as the letters being "cut off", so it is dropped for Arabic.
+    final titleStyle = TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+      height: 1.3,
+      letterSpacing: isEnglish ? 0.5 : 0,
+      color: Colors.white,
+    );
+    final subStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      height: 1.4,
+      letterSpacing: isEnglish ? 0.8 : 0,
+      color: Colors.white.withOpacity(0.85),
+    );
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
         gradient: kPrimaryGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x33004d01),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
+        borderRadius:
+            BorderRadius.vertical(bottom: Radius.circular(AppRadius.banner)),
+        boxShadow: AppShadows.subtle,
       ),
-      padding: EdgeInsets.fromLTRB(pad, AppSpacing.md, pad, AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isEnglish
-                ? 'LAND REGISTRY & CADASTRE'
-                : 'المديرية العامة للشؤون العقارية',
-            style: AppType.eyebrow.copyWith(
-              color: Colors.white.withOpacity(0.82),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(pad, AppSpacing.md, pad, AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isEnglish
+                  ? 'LAND REGISTRY & CADASTRE'
+                  : 'المديرية العامة للشؤون العقارية',
+              style: titleStyle,
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            isEnglish ? 'Welcome' : 'مرحباً بك',
-            style: AppType.display.copyWith(color: Colors.white),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              isEnglish ? 'Republic of Lebanon' : 'الجمهورية اللبنانية',
+              style: subStyle,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              isEnglish ? 'Ministry of Finance' : 'وزارة المالية',
+              style: subStyle,
+            ),
+          ],
+        ),
       ),
     );
   }

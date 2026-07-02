@@ -11,13 +11,13 @@ import 'package:flutter/material.dart';
 class AppMotion {
   AppMotion._();
 
-  /// Durations.
-  static const Duration fast = Duration(milliseconds: 160);
-  static const Duration base = Duration(milliseconds: 340);
-  static const Duration slow = Duration(milliseconds: 520);
+  /// Durations (per "The Cadastral Line" motion spec).
+  static const Duration fast = Duration(milliseconds: 120);
+  static const Duration base = Duration(milliseconds: 220);
+  static const Duration slow = Duration(milliseconds: 300);
 
   /// Per-item delay for cascading (staggered) grid/list reveals.
-  static const Duration stagger = Duration(milliseconds: 70);
+  static const Duration stagger = Duration(milliseconds: 40);
 
   /// Entrance easing — decelerate, "emphasized" feel.
   static const Curve enter = Curves.easeOutCubic;
@@ -38,8 +38,8 @@ class AppReveal extends StatefulWidget {
     required this.child,
     this.delay = Duration.zero,
     this.duration,
-    this.dy = 18,
-    this.scaleFrom = 0.96,
+    this.dy = 8,
+    this.scaleFrom = 1.0,
   });
 
   final Widget child;
