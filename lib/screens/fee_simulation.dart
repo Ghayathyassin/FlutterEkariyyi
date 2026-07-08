@@ -15,11 +15,25 @@ import '../theme/app_motion.dart';
 import '../utils/format.dart';
 import '../widgets/register_ui.dart';
 
-/// Fee simulation. The fee CALCULATIONS are ported 1:1 from the LRC VB.NET
-/// `API_Fees_calculator_ar` (`tr_calc`) — constants, formulas and the
-/// round-UP-to-10,000 rule (`calc_round`) mirror the VB reference exactly.
-/// Only the per-type MESSAGES (the hint + footnotes) are read live from
-/// `/api/fees/all`; the fee numbers are NOT taken from that API.
+/// Fee simulation. The transaction list and the fee breakdown are now served
+/// live by the backend fee-simulation API (the old VB.NET port + hardcoded
+/// names are gone):
+///   * `/api/fee-simulation/transactions` → the transaction types (code + AR/EN
+///     name); cached via [feeCache].
+///   * `/api/fee-simulation/fee-info?transactionTypeCode=..&appraisedValue=..&foreignFlag=..`
+///     → the already-calculated fee rows (AR/EN label + amount). We only sum
+///     them for the Total; no client-side calculation remains.
+///
+/// `foreignFlag` (N = 3% / Y = 5% sale fee) only applies to Sale (code 1).
+/// Inheritance (code 8) and Notations (code 9) ignore the value, so we send
+/// `appraisedValue=0` and hide the value input.
+///
+/// Each transaction carries up to two messages (AR + EN):
+///   * `message1Field` / `message1EnglishField` — an input hint shown as soon as
+///     the transaction is selected (e.g. Sale: "multiply the rental value by 30").
+///   * `message2Field` / `message2EnglishField` — a note shown only after the fee
+///     is calculated (e.g. Construction: the doubled-fee warning).
+/// Blank message fields render nothing.
 class FeesSimulation extends StatefulWidget {
   final Function(Locale) onLocaleChange;
 
@@ -30,72 +44,65 @@ class FeesSimulation extends StatefulWidget {
 }
 
 class FeesSimulationState extends State<FeesSimulation> {
+  // Transaction types from the API: each is {codeField, nameField (AR),
+  // nameEnglishField (EN)}.
+  List<Map<String, dynamic>> _transactions = [];
+  // Placeholder + localized names driving the dropdown (rebuilt on locale
+  // change from [_transactions]).
   List<String> _transactionTypes = [];
   String? _selectedTransactionType;
+
   final TextEditingController _valueController = TextEditingController();
-  String? _message;
-  List<Map<String, String>>? _feesTable;
-  bool _isValueInputEnabled = true;
+
+  // Raw fee-info rows from the last calculation (each has nameField /
+  // nameEnglishField / amountField). Kept raw so the labels re-localize live
+  // when the language is switched.
+  List<dynamic>? _feeInfo;
+
   bool _showValue = false;
-  // Fee rates, fixed fees and messages all come from /api/fees/all.
-  Map<String, dynamic> _feesData = {};
-  bool _isLoading = true;
-  // "Lebanese nationality" toggle on the Sale form: when checked the sale uses
-  // the reduced rate SaleFees.pFaraghResidential instead of pFaragh.
-  bool _isForResidential = false;
+  // Sale-only "Lebanese Nationality" toggle: checked → foreignFlag N (3%),
+  // unchecked → foreignFlag Y (5%).
+  bool _isLebanese = false;
+
+  bool _isLoading = true; // initial transactions load
+  bool _isCalculating = false; // fee-info round-trip in flight
   // Bumped on each calculation so the result rows re-cascade in every time.
   int _calcSeq = 0;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _transactionTypes = [
-      S.of(context).selectTransactionType,
-      S.of(context).sale,
-      S.of(context).construction,
-      S.of(context).constructionAndSubdivisions,
-      S.of(context).subdivisionsIntoUnit,
-      S.of(context).lien,
-      S.of(context).lienRemoval,
-      S.of(context).easement,
-      S.of(context).inheritance,
-      S.of(context).notation
-    ];
-
-    if (!_transactionTypes.contains(_selectedTransactionType)) {
-      _selectedTransactionType =
-          _transactionTypes.isNotEmpty ? _transactionTypes[0] : null;
-    }
-  }
+  // VB codes served by the API: 8 = Inheritance, 9 = Notations — value-less.
+  static const int _inheritanceCode = 8;
+  static const int _notationCode = 9;
+  static const int _saleCode = 1;
 
   @override
   void initState() {
     super.initState();
-    _isValueInputEnabled = false;
-    _loadMessages();
+    _loadTransactions();
   }
 
-  /// Loads the per-type messages from /api/fees/all (cached via feeCache). Only
-  /// the message strings are consumed — the fee numbers stay hardcoded (VB).
-  Future<void> _loadMessages() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _rebuildTypeNames();
+  }
+
+  /// Loads the transaction types from `/api/fee-simulation/transactions`
+  /// (cached via [feeCache]).
+  Future<void> _loadTransactions() async {
     try {
-      final cachedFees = await feeCache.cachedFees;
-      if (cachedFees != null && cachedFees['fees'] != null) {
-        if (mounted) {
-          setState(() =>
-              _feesData = Map<String, dynamic>.from(cachedFees['fees']));
-        }
+      final cached = await feeCache.cachedFees;
+      if (cached != null && cached['transactions'] is List) {
+        _applyTransactions(cached['transactions'] as List);
         return;
       }
-      final url = Uri.parse('https://nirs.lrc.gov.lb/api/fees/all');
+      final url =
+          Uri.parse('https://test-app.lrc.gov.lb/api/fee-simulation/transactions');
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
-        if (decoded is Map) {
-          await feeCache.setCachedFees({'fees': decoded});
-          if (mounted) {
-            setState(() => _feesData = Map<String, dynamic>.from(decoded));
-          }
+        if (decoded is List) {
+          await feeCache.setCachedFees({'transactions': decoded});
+          _applyTransactions(decoded);
         }
       }
     } catch (e) {
@@ -108,456 +115,177 @@ class FeesSimulationState extends State<FeesSimulation> {
     }
   }
 
-  /// API section name in /api/fees/all for the given transaction type.
-  String _sectionKeyFor(String? type) {
-    if (type == S.of(context).sale) return 'SaleFees';
-    if (type == S.of(context).construction) return 'ConstructionFees';
-    if (type == S.of(context).constructionAndSubdivisions) {
-      return 'ConstructionAndSubdivisionsFees';
+  void _applyTransactions(List raw) {
+    if (!mounted) return;
+    setState(() {
+      _transactions = [
+        for (final t in raw)
+          if (t is Map) Map<String, dynamic>.from(t),
+      ];
+      _rebuildTypeNames();
+    });
+  }
+
+  /// Rebuilds the localized dropdown list (placeholder + type names) for the
+  /// current locale, keeping the current selection if it still resolves.
+  void _rebuildTypeNames() {
+    if (!mounted) return;
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    _transactionTypes = [
+      S.of(context).selectTransactionType,
+      for (final t in _transactions)
+        (isEnglish ? t['nameEnglishField'] : t['nameField']).toString(),
+    ];
+    if (!_transactionTypes.contains(_selectedTransactionType)) {
+      _selectedTransactionType =
+          _transactionTypes.isNotEmpty ? _transactionTypes[0] : null;
     }
-    if (type == S.of(context).subdivisionsIntoUnit) return 'SubdivisionFees';
-    if (type == S.of(context).lien) return 'LeinFees';
-    if (type == S.of(context).lienRemoval) return 'LienRemovalFees';
-    if (type == S.of(context).easement) return 'EasementFees';
-    if (type == S.of(context).inheritance) return 'InheritanceFees';
-    if (type == S.of(context).notation) return 'NotationFees';
-    return '';
   }
 
-  /// Reads `message{which}_{en|ar}` for [type] from the fetched fees data.
-  String _apiMessage(String? type, int which, bool isEnglish) {
-    final section = _feesData[_sectionKeyFor(type)];
-    if (section is! Map) return '';
-    final key = 'message${which}_${isEnglish ? 'en' : 'ar'}';
-    return (section[key] ?? '').toString();
-  }
-
-  /// Reads a numeric fee field from a /fees/all section (0 if missing).
-  double _f(dynamic section, String key) {
-    if (section is! Map) return 0;
-    final v = section[key];
-    return v is num ? v.toDouble() : 0;
-  }
-
-  String capitalizeEachWord(String input) {
-    return input.split(' ').map((word) {
-      if (word.isEmpty) return word;
-      return '${word[0].toUpperCase()}${word.substring(1)}';
-    }).join(' ');
-  }
-
-  /// 1:1 port of the VB `calc_round`: rounds [amount] UP to the next multiple
-  /// of 10,000 (with a floor of 1). Already-multiples are left unchanged.
-  double _calcRound(double amount) {
-    if (amount < 1) amount = 1;
-    final int remainder = (amount % 10000).round();
-    if (remainder > 0) {
-      return (amount + (10000 - remainder)).roundToDouble();
+  /// The transaction code for the currently selected (localized) name, or null
+  /// for the placeholder / no selection.
+  int? _selectedCode() {
+    if (_selectedTransactionType == null ||
+        _selectedTransactionType == S.of(context).selectTransactionType) {
+      return null;
     }
-    return amount.roundToDouble();
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    for (final t in _transactions) {
+      final name =
+          (isEnglish ? t['nameEnglishField'] : t['nameField']).toString();
+      if (name == _selectedTransactionType) return (t['codeField'] as num).toInt();
+    }
+    return null;
   }
 
-  Map<String, String> _row(String fee, double value) =>
-      {"Fee": fee, "Value": value.toStringAsFixed(2)};
+  bool _codeNeedsValue(int code) =>
+      code != _inheritanceCode && code != _notationCode;
+
+  /// The transaction map currently selected, or null for the placeholder.
+  Map<String, dynamic>? _selectedTx() {
+    final code = _selectedCode();
+    if (code == null) return null;
+    for (final t in _transactions) {
+      if ((t['codeField'] as num?)?.toInt() == code) return t;
+    }
+    return null;
+  }
+
+  /// Reads a message off the selected transaction in the current locale
+  /// (trimmed; empty when there is no message or nothing is selected).
+  String _messageFor(String arKey, String enKey) {
+    final t = _selectedTx();
+    if (t == null) return '';
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    final v = isEnglish ? t[enKey] : t[arKey];
+    return (v ?? '').toString().trim();
+  }
+
+  /// Input hint shown as soon as a transaction is selected.
+  String _message1() => _messageFor('message1Field', 'message1EnglishField');
+
+  /// Note shown only after the fee has been calculated.
+  String _message2() => _messageFor('message2Field', 'message2EnglishField');
 
   void _resetFields() {
     setState(() {
-      _selectedTransactionType = null;
+      _selectedTransactionType = _transactionTypes.isNotEmpty
+          ? _transactionTypes[0]
+          : null;
       _valueController.clear();
-      _message = null;
-      _feesTable = null;
-      _isValueInputEnabled = false;
+      _feeInfo = null;
       _showValue = false;
-      _isForResidential = false;
+      _isLebanese = false;
     });
   }
 
   void _onTransactionTypeChanged(String? newValue) {
-    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
     setState(() {
       _selectedTransactionType = newValue;
-      if (newValue == null || newValue == S.of(context).selectTransactionType) {
-        _message = null;
-        _isValueInputEnabled = false;
-        _showValue = false;
-      } else {
-        // message1 from the API (the hint shown under the picker).
-        final msg = _apiMessage(newValue, 1, isEnglish);
-        _message = msg.trim().isEmpty ? null : msg;
-        // Inheritance & notation don't take a value (VB).
-        final needsValue = newValue != S.of(context).inheritance &&
-            newValue != S.of(context).notation;
-        _isValueInputEnabled = needsValue;
-        _showValue = needsValue;
-      }
+      final code = _selectedCode();
+      _showValue = code != null && _codeNeedsValue(code);
+      _isLebanese = false;
+      _feeInfo = null;
     });
     _valueController.clear();
-    _feesTable = null;
   }
 
-  void _calculateFees() {
-    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+  /// Fetches the fee breakdown from `/api/fee-simulation/fee-info` for the
+  /// selected transaction, value and (Sale-only) foreign flag.
+  Future<void> _calculateFees() async {
     FocusManager.instance.primaryFocus?.unfocus();
 
-    if (_selectedTransactionType == null) return;
+    final code = _selectedCode();
+    if (code == null) return;
 
-    double value = double.tryParse(_valueController.text) ?? 0;
-    if (value <= 0 &&
-        _selectedTransactionType != S.of(context).notation &&
-        _selectedTransactionType != S.of(context).inheritance) {
-      return;
-    }
+    final needsValue = _codeNeedsValue(code);
+    final double value = needsValue ? (double.tryParse(_valueController.text) ?? 0) : 0;
+    if (needsValue && value <= 0) return;
 
-    if (_selectedTransactionType == S.of(context).sale) {
-      _handleSaleFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).construction) {
-      _handleConstructionFees(value, isEnglish);
-    } else if (_selectedTransactionType ==
-        S.of(context).constructionAndSubdivisions) {
-      _handleConstructionAndSubdivisionsFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).subdivisionsIntoUnit) {
-      _handleSubdivisionsIntoUnitFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).lien) {
-      _handleLienFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).lienRemoval) {
-      _handleLienRemovalFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).easement) {
-      _handleEasementFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).inheritance) {
-      _handleInheritanceFees(value, isEnglish);
-    } else if (_selectedTransactionType == S.of(context).notation) {
-      _handleNotationFees(value, isEnglish);
-    }
-  }
+    final foreignFlag = _isLebanese ? 'N' : 'Y';
+    final url = Uri.parse(
+        'https://test-app.lrc.gov.lb/api/fee-simulation/fee-info'
+        '?transactionTypeCode=$code'
+        '&appraisedValue=${_fmtValue(value)}'
+        '&foreignFlag=$foreignFlag');
 
-  // ---- VB Case 1: عملية بيع (Sale) --------------------------------------
-  void _handleSaleFees(double value, bool isEnglish) {
-    final s = _feesData['SaleFees'];
-    final double pKimatAked = value;
-    // "Lebanese nationality" checkbox → use the reduced rate
-    // (SaleFees.pFaraghResidential) when ticked; fall back to pFaragh if that
-    // field isn't present in the API yet.
-    final double residentialRate = _f(s, 'pFaraghResidential');
-    final double faraghRate = (_isForResidential && residentialRate > 0)
-        ? residentialRate
-        : _f(s, 'pFaragh');
-    final double pFaragh = _calcRound(pKimatAked * faraghRate);
-
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(
-        pFaragh + pRasemSanad + pRasemAked + pRasemKayd + pRasemSanadJadid);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-
-    final double pRasemTabeaAked = _f(s, 'pRasemTabeaAked');
-    final double pRasemTabeaMali =
-        _calcRound(pKimatAked * _f(s, 'pRasemTabeaMali'));
-    final double pRasemNakaba = _calcRound(pKimatAked * _f(s, 'pRasemNakaba'));
-    final double pTabeaSanad = _f(s, 'pTabeaSanad');
-
-    final double finalTot = totOfRousoum +
-        pRasemBaladi +
-        pRasemTabeaAked +
-        pRasemTabeaMali +
-        pRasemNakaba +
-        pTabeaSanad;
-
-    _updateFeesTable([
-      _row(S.of(context).salesFee, pFaragh),
-      _row(S.of(context).deedFee, pRasemSanad),
-      _row(S.of(context).contractFee, pRasemAked),
-      _row(S.of(context).recordingFee, pRasemKayd),
-      _row(S.of(context).municipalityFee, pRasemBaladi),
-      _row(S.of(context).newDeedFee, pRasemSanadJadid),
-      _row(S.of(context).contractStampFee, pRasemTabeaAked),
-      _row(S.of(context).stampFeePerThousand, pRasemTabeaMali),
-      _row(S.of(context).lawyersFee, pRasemNakaba),
-      _row(S.of(context).deedStampFee, pTabeaSanad),
-      _row(S.of(context).total, finalTot),
-    ]);
-  }
-
-  // ---- VB Case 4: انشاءات (Construction) --------------------------------
-  void _handleConstructionFees(double value, bool isEnglish) {
-    final s = _feesData['ConstructionFees'];
-    final double pKimatAked = value;
-    final double pInchaat = _calcRound(pKimatAked * _f(s, 'pInchaat'));
-
-    final double pTopograph = _f(s, 'pTopograph');
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(
-        pInchaat + pTopograph + pRasemSanad + pRasemAked + pRasemKayd);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-
-    // VB Case 4: final_tot = tot + sanad_jadid (the municipality fee is shown
-    // but intentionally NOT added to the total).
-    final double finalTot = totOfRousoum + pRasemSanadJadid;
-
-    _updateFeesTable(
-      [
-        _row(S.of(context).constructionFee, pInchaat),
-        _row(S.of(context).advanceTopographicFee, pTopograph),
-        _row(S.of(context).deedFee, pRasemSanad),
-        _row(S.of(context).contractFee, pRasemAked),
-        _row(S.of(context).recordingFee, pRasemKayd),
-        _row(S.of(context).newDeedFee, pRasemSanadJadid),
-        _row(S.of(context).municipalityFee, pRasemBaladi),
-        _row(S.of(context).total, finalTot),
-      ],
-    );
-  }
-
-  // ---- VB Case 5: انشاءات و افراز (Construction & Subdivisions) ----------
-  void _handleConstructionAndSubdivisionsFees(double value, bool isEnglish) {
-    final s = _feesData['ConstructionAndSubdivisionsFees'];
-    final double pKimatAked = value;
-    final double pInchaat = _calcRound(pKimatAked * _f(s, 'pInchaat'));
-
-    final double pTopograph = _f(s, 'pTopograph');
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(pInchaat +
-        pTopograph +
-        pRasemSanad +
-        pRasemAked +
-        pRasemKayd +
-        pRasemSanadJadid);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double finalTot = totOfRousoum + pRasemBaladi;
-
-    _updateFeesTable(
-      [
-        _row(S.of(context).constructionAndSubdivisionfee, pInchaat),
-        _row(S.of(context).advanceTopographicFee, pTopograph),
-        _row(S.of(context).deedFeeUunit, pRasemSanad),
-        _row(S.of(context).contractFee, pRasemAked),
-        _row(S.of(context).recordingFeeUnit, pRasemKayd),
-        _row(S.of(context).newDeedFee, pRasemSanadJadid),
-        _row(S.of(context).municipalityFee, pRasemBaladi),
-        _row(S.of(context).total, finalTot),
-      ],
-    );
-  }
-
-  // ---- VB Case 6: افراز حقوق مختلفة (Subdivisions) ----------------------
-  void _handleSubdivisionsIntoUnitFees(double value, bool isEnglish) {
-    final s = _feesData['SubdivisionFees'];
-    final double pKimatAked = value;
-    final double pIhdah = _calcRound(pKimatAked * _f(s, 'pIhda'));
-
-    final double pTopograph = _f(s, 'pTopograph');
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(pIhdah +
-        pTopograph +
-        pRasemSanad +
-        pRasemAked +
-        pRasemKayd +
-        pRasemSanadJadid);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double finalTot = totOfRousoum + pRasemBaladi;
-
-    _updateFeesTable(
-      [
-        _row(S.of(context).topographicFee, pIhdah),
-        _row(S.of(context).advanceTopographicFee, pTopograph),
-        _row(S.of(context).deedFeeUunit, pRasemSanad),
-        _row(S.of(context).contractFee, pRasemAked),
-        _row(S.of(context).recordingFeeUnit, pRasemKayd),
-        _row(S.of(context).newDeedFee, pRasemSanadJadid),
-        _row(S.of(context).municipalityFee, pRasemBaladi),
-        _row(S.of(context).total, finalTot),
-      ],
-    );
-  }
-
-  // ---- VB Case 8: تأمين (Lien) ------------------------------------------
-  void _handleLienFees(double value, bool isEnglish) {
-    final s = _feesData['LeinFees'];
-    final double pKimatAked = value;
-    final double pTaamin = _calcRound(pKimatAked * _f(s, 'pTaamin'));
-
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pSoura = _f(s, 'pSoura');
-    final double totOfRousoum = _calcRound(
-        pTaamin + pRasemSanad + pRasemAked + pRasemKayd + pSoura);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double pRasemTabaaMali =
-        _calcRound(pKimatAked * _f(s, 'pRasemTabaaMali'));
-    final double pNakaba = _calcRound(pKimatAked * _f(s, 'pNakaba'));
-
-    final double finalTot =
-        totOfRousoum + pRasemBaladi + pRasemTabaaMali + pNakaba;
-
-    _updateFeesTable([
-      _row(isEnglish ? 'Lien Fee 1%' : 'رسم تأمين 1%', pTaamin),
-      _row(S.of(context).deedFee, pRasemSanad),
-      _row(S.of(context).contractFee, pRasemAked),
-      _row(S.of(context).recordingFee, pRasemKayd),
-      _row(S.of(context).photocopyFee, pSoura),
-      _row(S.of(context).municipalityFee, pRasemBaladi),
-      _row(S.of(context).stampFeePerThousand, pRasemTabaaMali),
-      _row(S.of(context).lawyersFee, pNakaba),
-      _row(S.of(context).total, finalTot),
-    ]);
-  }
-
-  // ---- VB Case 7: فك تأمين (Lien removal) -------------------------------
-  void _handleLienRemovalFees(double value, bool isEnglish) {
-    final s = _feesData['LienRemovalFees'];
-    final double pTaamin = _calcRound(value * _f(s, 'pTaamin'));
-
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(
-        pTaamin + pRasemSanad + pRasemAked + pRasemKayd + pRasemSanadJadid);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double finalTot = totOfRousoum + pRasemBaladi;
-
-    _updateFeesTable([
-      _row(isEnglish ? 'Lien Removal Fee 1%' : 'رسم فك تأمين 1%', pTaamin),
-      _row(S.of(context).deedFeeUunit, pRasemSanad),
-      _row(S.of(context).contractFee, pRasemAked),
-      _row(S.of(context).recordingFeeUnit, pRasemKayd),
-      _row(S.of(context).newDeedFee, pRasemSanadJadid),
-      _row(S.of(context).municipalityFee, pRasemBaladi),
-      _row(S.of(context).total, finalTot),
-    ]);
-  }
-
-  // ---- VB Case 10: حق انتفاع (Easement) ---------------------------------
-  void _handleEasementFees(double value, bool isEnglish) {
-    final s = _feesData['EasementFees'];
-    final double pKimatAked = value;
-
-    final double pTopograph = _f(s, 'pTopograph');
-    final double pTabeaAked = _f(s, 'pTabeaAked');
-    final double pRasem5 = _calcRound(pKimatAked * _f(s, 'pRasem5'));
-
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(pTopograph +
-        pTabeaAked +
-        pRasem5 +
-        pRasemSanad +
-        pRasemAked +
-        pRasemKayd +
-        pRasemSanadJadid);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double pRasemTabaaMali =
-        _calcRound(pKimatAked * _f(s, 'pRasemTabaamali'));
-    final double pNakaba = _calcRound(pKimatAked * _f(s, 'pNakaba'));
-
-    final double finalTot =
-        totOfRousoum + pRasemBaladi + pNakaba + pRasemTabaaMali;
-
-    _updateFeesTable([
-      _row(S.of(context).topographicFee, pTopograph),
-      _row(S.of(context).contractStampFee, pTabeaAked),
-      _row(isEnglish ? '5% Fee' : 'رسم 5 %', pRasem5),
-      _row(S.of(context).contractFee, pRasemAked),
-      _row(S.of(context).deedFee, pRasemSanad),
-      _row(S.of(context).recordingFee, pRasemKayd),
-      _row(S.of(context).newDeedFee, pRasemSanadJadid),
-      _row(S.of(context).municipalityFee, pRasemBaladi),
-      _row(S.of(context).stampFeePerThousand, pRasemTabaaMali),
-      _row(S.of(context).lawyersFee, pNakaba),
-      _row(S.of(context).total, finalTot),
-    ]);
-  }
-
-  // ---- VB Case 11: انتقال (Inheritance / Transfer) ----------------------
-  void _handleInheritanceFees(double value, bool isEnglish) {
-    final s = _feesData['InheritanceFees'];
-    final double pRasemTabea = _f(s, 'pRasemTabea');
-    final double pRasemSanad = _f(s, 'pRasemSanad');
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pRasemSanadJadid = _f(s, 'pRasemSanadJadid');
-    final double totOfRousoum = _calcRound(
-        pRasemSanad + pRasemAked + pRasemKayd + pRasemTabea + pRasemSanadJadid);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double finalTot = totOfRousoum + pRasemBaladi;
-
-    _updateFeesTable(
-      [
-        _row(S.of(context).contractFee, pRasemAked),
-        _row(S.of(context).recordingFee, pRasemKayd),
-        _row(S.of(context).stampFee, pRasemTabea),
-        _row(S.of(context).deedFeeOwners, pRasemSanad),
-        _row(S.of(context).newDeedFee, pRasemSanadJadid),
-        _row(S.of(context).municipalityFee, pRasemBaladi),
-        _row(S.of(context).total, finalTot),
-      ],
-    );
-  }
-
-  // ---- VB Case 13: اشارات (Notation) ------------------------------------
-  void _handleNotationFees(double value, bool isEnglish) {
-    final s = _feesData['NotationFees'];
-    final double pRasemAked = _f(s, 'pRasemAked');
-    final double pRasemKayd = _f(s, 'pRasemKayd');
-    final double pIstidaa = _f(s, 'pIstidaa');
-    final double totOfRousoum = _calcRound(pRasemAked + pRasemKayd + pIstidaa);
-
-    final double pRasemBaladi =
-        _calcRound(totOfRousoum * _f(s, 'pRasemBaladi'));
-    final double finalTot = totOfRousoum + pRasemBaladi;
-
-    _updateFeesTable([
-      _row(S.of(context).contractFee, pRasemAked),
-      _row(S.of(context).recordingFeeProperty, pRasemKayd),
-      _row(S.of(context).applicationFee, pIstidaa),
-      _row(S.of(context).municipalityFee, pRasemBaladi),
-      _row(S.of(context).total, finalTot),
-    ]);
-  }
-
-  void _updateFeesTable(List<Map<String, String>> feesTable) {
-    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-    // message2 from the API (the footnote shown under the results).
-    final msg = _apiMessage(_selectedTransactionType, 2, isEnglish);
     setState(() {
-      _feesTable = feesTable;
-      _message = msg.trim().isEmpty ? null : msg;
-      _calcSeq++;
+      _isCalculating = true;
+      _feeInfo = null;
     });
+
+    try {
+      final response = await http.get(url);
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        if (decoded is List) {
+          setState(() {
+            _feeInfo = decoded;
+            _calcSeq++;
+          });
+        }
+      } else {
+        ErrorSnackbar.show(
+            context: context, message: S.of(context).dataFetchingError);
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorSnackbar.show(
+            context: context, message: S.of(context).dataFetchingError);
+      }
+    } finally {
+      if (mounted) setState(() => _isCalculating = false);
+    }
+  }
+
+  /// Serializes the appraised value for the query string, dropping a trailing
+  /// `.0` on whole amounts (property values are whole LBP).
+  String _fmtValue(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  /// Builds the display rows (localized label + amount) plus the summed Total
+  /// from the raw fee-info response.
+  List<Map<String, String>> _feeRows() {
+    final rows = <Map<String, String>>[];
+    if (_feeInfo == null) return rows;
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    double total = 0;
+    for (final item in _feeInfo!) {
+      if (item is! Map) continue;
+      final label =
+          (isEnglish ? item['nameEnglishField'] : item['nameField']).toString();
+      final amount = (item['amountField'] as num?)?.toDouble() ?? 0;
+      total += amount;
+      rows.add({'Fee': label, 'Value': amount.toStringAsFixed(2)});
+    }
+    rows.add({'Fee': S.of(context).total, 'Value': total.toStringAsFixed(2)});
+    return rows;
   }
 
   /// One row of the fee breakdown. The final row (the total) is rendered as a
   /// highlighted footer bar; the rest are clean label/value rows separated by
-  /// hairline dividers (no more cards stacked flush against each other).
+  /// hairline dividers.
   Widget _buildFeeRow(Map<String, String> fee, bool isTotal) {
     if (isTotal) {
       return Container(
@@ -616,6 +344,42 @@ class FeesSimulationState extends State<FeesSimulation> {
     );
   }
 
+  /// A message panel. [warning] = false renders the blue input hint (message 1);
+  /// [warning] = true renders the amber post-calculation note (message 2).
+  Widget _messageNote(String text, {required bool warning}) {
+    final Color accent = warning ? AppColors.amber : AppColors.info;
+    final Color bg = warning ? AppColors.amberTint : AppColors.blueTint;
+    final Color textColor = warning ? AppColors.amberText : AppColors.info;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.smd),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: accent.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            warning
+                ? Icons.warning_amber_rounded
+                : Icons.info_outline_rounded,
+            size: 18,
+            color: textColor,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: AppType.caption.copyWith(height: 1.5, color: textColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _navigateTo(BuildContext context, int index, String route) {
     Provider.of<DrawerState>(context, listen: false).setSelectedIndex(index);
     Navigator.pushReplacementNamed(context, route);
@@ -631,6 +395,11 @@ class FeesSimulationState extends State<FeesSimulation> {
   Widget build(BuildContext context) {
     var locale = Localizations.localeOf(context);
     var isEnglish = locale.languageCode == 'en';
+    final feeRows = _feeRows();
+    // message1 = input hint (shown on selection); message2 = note (shown after
+    // the calculation). Blank when the selected transaction has no such message.
+    final message1 = _message1();
+    final message2 = _message2();
 
     // ignore: deprecated_member_use
     return WillPopScope(
@@ -667,11 +436,9 @@ class FeesSimulationState extends State<FeesSimulation> {
                           hint: Text(S.of(context).selectTransactionType),
                           value: _selectedTransactionType,
                           isExpanded: true,
-                          items: dividedDropdownItems(_transactionTypes,
-                              label: capitalizeEachWord),
+                          items: dividedDropdownItems(_transactionTypes),
                           selectedItemBuilder: (context) =>
-                              dropdownSelectedBuilder(_transactionTypes,
-                                  label: capitalizeEachWord),
+                              dropdownSelectedBuilder(_transactionTypes),
                           onChanged: _onTransactionTypeChanged,
                           dropdownColor: Colors.white,
                         ),
@@ -687,21 +454,26 @@ class FeesSimulationState extends State<FeesSimulation> {
                                 decoration: InputDecoration(
                                   hintText: S.of(context).enterValueInL,
                                 ),
-                                enabled: _isValueInputEnabled,
                               ),
                             ],
                           )
                         else
                           const SizedBox.shrink(),
-                        // VB is_for_sakan — residential sale (3% vacancy fee).
-                        if (_selectedTransactionType == S.of(context).sale)
+                        // Input hint (message 1) — shown as soon as a
+                        // transaction with a hint is selected.
+                        if (message1.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          _messageNote(message1, warning: false),
+                        ],
+                        // Sale-only foreign flag (N = 3% / Y = 5%).
+                        if (_selectedCode() == _saleCode)
                           CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
                             controlAffinity: ListTileControlAffinity.leading,
-                            value: _isForResidential,
+                            value: _isLebanese,
                             activeColor: AppColors.primary,
                             onChanged: (v) => setState(
-                                () => _isForResidential = v ?? false),
+                                () => _isLebanese = v ?? false),
                             title: Text(
                               isEnglish
                                   ? 'Lebanese Nationality'
@@ -714,8 +486,20 @@ class FeesSimulationState extends State<FeesSimulation> {
                             Expanded(
                               child: ElevatedButton(
                                 style: AppButtons.danger(),
-                                onPressed: _calculateFees,
-                                child: Text(S.of(context).feesCalculation),
+                                onPressed:
+                                    _isCalculating ? null : _calculateFees,
+                                child: _isCalculating
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                  Colors.white),
+                                        ),
+                                      )
+                                    : Text(S.of(context).feesCalculation),
                               ),
                             ),
                             const SizedBox(width: AppSpacing.md),
@@ -729,7 +513,7 @@ class FeesSimulationState extends State<FeesSimulation> {
                           ],
                         ),
                         const SizedBox(height: AppSpacing.lg),
-                        if (_feesTable != null) ...[
+                        if (feeRows.isNotEmpty) ...[
                           SectionHeader(
                             label: isEnglish
                                 ? 'Fee breakdown'
@@ -748,47 +532,23 @@ class FeesSimulationState extends State<FeesSimulation> {
                             clipBehavior: Clip.antiAlias,
                             child: Column(
                               children: [
-                                for (int i = 0; i < _feesTable!.length; i++)
+                                for (int i = 0; i < feeRows.length; i++)
                                   AppReveal(
                                     delay: AppMotion.stagger * i,
                                     dy: 8,
                                     child: _buildFeeRow(
-                                      _feesTable![i],
-                                      i == _feesTable!.length - 1,
+                                      feeRows[i],
+                                      i == feeRows.length - 1,
                                     ),
                                   ),
                               ],
                             ),
                           ),
-                        ],
-                        if (_message != null) ...[
-                          const SizedBox(height: 16.0),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(AppSpacing.smd),
-                            decoration: BoxDecoration(
-                              color: AppColors.amberTint,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.md),
-                              border: Border.all(
-                                  color: AppColors.amber.withOpacity(0.35)),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(Icons.info_outline_rounded,
-                                    size: 18, color: AppColors.amberText),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: Text(
-                                    _message!,
-                                    textAlign: TextAlign.justify,
-                                    style: AppType.caption.copyWith(height: 1.5),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // Post-calculation note (message 2).
+                          if (message2.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            _messageNote(message2, warning: true),
+                          ],
                         ],
                       ],
                     ),

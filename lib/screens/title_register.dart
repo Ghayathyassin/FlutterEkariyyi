@@ -61,6 +61,11 @@ class TitleRegisterState extends State<TitleRegister> {
   // replacing the previously hardcoded 50000. The screen does NOT proceed
   // unless these settings load — there is no silent fallback.
   double _unitCost = 0;
+  // Flat application fee (PaymentTaxDLRC) and e‑services commission percent
+  // (PaymentAmountCommission), also from /configuration/payment-settings —
+  // surfaced in the note under the basket.
+  double _taxAmount = 0;
+  double _commissionPercent = 0;
   bool _settingsLoading = true;
   bool _settingsFailed = false;
   @override
@@ -86,6 +91,8 @@ class TitleRegisterState extends State<TitleRegister> {
       if (mounted) {
         setState(() {
           _unitCost = settings.amount;
+          _taxAmount = settings.tax;
+          _commissionPercent = settings.commissionPercent;
           _settingsLoading = false;
         });
       }
@@ -98,6 +105,45 @@ class TitleRegisterState extends State<TitleRegister> {
         });
       }
     }
+  }
+
+  /// Formats a percent without trailing zeros (0.90 -> "0.9", 1.0 -> "1").
+  String _formatPercent(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+
+  /// Amber info note under the basket (same style as fee simulation): states
+  /// the flat application fee and the e‑services commission that get added to
+  /// the rounded total. Values come from /configuration/payment-settings.
+  Widget _buildFeeNote(bool isEnglish) {
+    final taxStr = formatAmount(_taxAmount);
+    final commStr = _formatPercent(_commissionPercent);
+    final text = isEnglish
+        ? 'A value of $taxStr L.L. application fee and $commStr% e-services fee will be added to the rounded total'
+        : 'سوف يضاف الى المجموع المدور $taxStr ل.ل. رسم استدعاء، و $commStr% كلفة خدمة الدفع الالكتروني';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.smd),
+      decoration: BoxDecoration(
+        color: AppColors.amberTint,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.amber.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 18, color: AppColors.amberText),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              text,
+              textAlign: TextAlign.justify,
+              style: AppType.caption.copyWith(height: 1.5),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> fetchProvinces() async {
@@ -870,6 +916,8 @@ class TitleRegisterState extends State<TitleRegister> {
                                             amount: formatAmount(
                                                 calculateTotalCost()),
                                           ),
+                                          const SizedBox(height: AppSpacing.md),
+                                          _buildFeeNote(isEnglish),
                                         ],
                                       )
                                     : Container(),
