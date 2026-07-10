@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
@@ -27,6 +28,9 @@ final ProvinceCache provinceCache = ProvinceCache();
 
 final _log = Logger(
   printer: PrettyPrinter(methodCount: 0, colors: true, printEmojis: true),
+  // These logs include full response bodies and user inputs, which must not
+  // reach production device logs — silence all logging in release builds.
+  level: kReleaseMode ? Level.off : Level.debug,
 );
 
 class TitleRegister extends StatefulWidget {

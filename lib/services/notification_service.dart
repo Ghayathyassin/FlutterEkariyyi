@@ -54,34 +54,56 @@ class NotificationService {
     _initialized = true;
   }
 
+  static const NotificationDetails _details = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'order_status',
+      'Order updates',
+      channelDescription:
+          'Notifications about your payment and order status',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/launcher_icon',
+    ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    ),
+  );
+
   /// Fire an immediate notification confirming the order is complete.
   static Future<void> showOrderCompleted({
     required String title,
     required String body,
   }) async {
+    await _show(title: title, body: body);
+  }
+
+  /// Displays an incoming push while the app is in the foreground. Android does
+  /// NOT show notification-payload pushes automatically when the app is open, so
+  /// we surface them through the local-notifications plugin. [payload] carries
+  /// the message's `data` (as JSON) so a tap can later be routed.
+  static Future<void> showRemote({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    await _show(title: title, body: body, payload: payload);
+  }
+
+  static Future<void> _show({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
     try {
       await init();
-      const details = NotificationDetails(
-        android: AndroidNotificationDetails(
-          'order_status',
-          'Order updates',
-          channelDescription:
-              'Notifications about your payment and order status',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/launcher_icon',
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      );
       await _plugin.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        title,
-        body,
-        details,
+        title.isEmpty ? null : title,
+        body.isEmpty ? null : body,
+        _details,
+        payload: payload,
       );
     } catch (e) {
       if (kDebugMode) debugPrint('[NotificationService] show failed: $e');

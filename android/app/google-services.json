@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "20599031368",
-    "project_id": "test-38eda",
-    "storage_bucket": "test-38eda.appspot.com"
+    "project_number": "469320132586",
+    "project_id": "lrc-lebanon",
+    "storage_bucket": "lrc-lebanon.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:20599031368:android:4d7e7d1131e2d02367ba7d",
+        "mobilesdk_app_id": "1:469320132586:android:248bd902e02e8874557493",
         "android_client_info": {
-          "package_name": "com.example.flutter_application_1"
+          "package_name": "lb.gov.lrc.ekariyyi"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDV8Htm43kssnU5jtprwfS5q_3I20pub8s"
+          "current_key": "AIzaSyAbvuRGh2k-OLS9JPMyxYVGqoOf8APXKlY"
         }
       ],
       "services": {

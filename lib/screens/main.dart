@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,17 +16,27 @@ import 'package:flutter_application_1/screens/title_register_change.dart';
 import 'package:flutter_application_1/screens/title_register.dart';
 import 'package:flutter_application_1/screens/transaction_tracking.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../generated/l10n.dart';
 import '../services/notification_service.dart';
+import '../services/push_token_service.dart';
 import '../theme/app_theme.dart';
 import 'splash_screen.dart';
 
-const storage = FlutterSecureStorage();
+/// Global navigator key so push-notification taps can navigate without a
+/// BuildContext (the tap arrives outside the widget tree).
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Handles a push delivered while the app is in the background or terminated.
+/// Runs in its own isolate, so Firebase must be initialised here. Notification-
+/// payload messages are shown by the OS automatically; this exists so data-only
+/// messages don't get dropped (and gives us a hook for future handling).
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
 
 /// Levantine (Lebanese) month names, used instead of intl's default Arabic
 /// (يناير، فبراير…). Applied to the shared `ar` DateSymbols so every Arabic
@@ -102,9 +113,18 @@ void main() async {
 
   try {
     await Firebase.initializeApp();
+    // Must be registered before runApp so background/terminated pushes are
+    // routed to our handler.
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     await FirebaseMessaging.instance.requestPermission();
+    // iOS: make sure foreground pushes surface as banners/sounds too.
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
     await NotificationService.init();
-    await dotenv.load(fileName: ".env");
   } catch (e) {
     log('Initialization error: $e');
   }
@@ -138,12 +158,54 @@ class MyAppState extends State<MyApp> {
     _loadSavedLocale();
     // Retrieve the token on app start up
     _getToken();
-    // Listen for incoming messages
+    _setupPushHandlers();
+  }
+
+  void _setupPushHandlers() {
+    // Foreground: Android doesn't show pushes while the app is open, so display
+    // them ourselves via the local-notifications plugin.
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message.notification != null && kDebugMode) {
-        log('Foreground push received');
+      final n = message.notification;
+      if (n != null) {
+        NotificationService.showRemote(
+          title: n.title ?? '',
+          body: n.body ?? '',
+          payload: jsonEncode(message.data),
+        );
       }
     });
+
+    // Tapped while the app was in the background.
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageTap);
+
+    // Tapped while the app was terminated (cold start from a notification).
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) _handleMessageTap(message);
+    });
+
+    // Re-register the token with the backend when FCM rotates it.
+    FirebaseMessaging.instance.onTokenRefresh.listen(PushTokenService.handleRefresh);
+  }
+
+  // Known named routes a notification is allowed to deep-link to. The backend
+  // sends the target as `data: { "route": "/paidInvoices" }`; anything not in
+  // this set is ignored (the app simply opens). Extend as the data contract
+  // with the backend is finalized.
+  static const Set<String> _pushRoutes = {
+    '/index',
+    '/titleRegister',
+    '/transactionTracking',
+    '/titleRegisterChange',
+    '/feesSimulation',
+    '/ownershipTracking',
+    '/paidInvoices',
+  };
+
+  void _handleMessageTap(RemoteMessage message) {
+    final route = message.data['route'];
+    if (route is String && _pushRoutes.contains(route)) {
+      navigatorKey.currentState?.pushNamed(route);
+    }
   }
 
   void _getToken() async {
@@ -187,6 +249,7 @@ class MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(isArabic: _locale.languageCode == 'ar'),
       routes: {

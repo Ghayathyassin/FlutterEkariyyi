@@ -159,8 +159,8 @@ class MainScreenState extends State<MainScreen> {
   }
 }
 
-/// A single selectable language card — a circular badge, the language label,
-/// and a selection caption. The selection transition is animated.
+/// A single selectable language card — a circular badge and the language label.
+/// The selection transition (border/shadow/badge tint) is animated.
 class _LanguageCard extends StatelessWidget {
   final String badge;
   final String label;
@@ -214,19 +214,6 @@ class _LanguageCard extends StatelessWidget {
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
-            fontFamily:
-                isArabic ? GoogleFonts.ibmPlexSansArabic().fontFamily : null,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          selected
-              ? (isArabic ? '● محدّد' : '● Selected')
-              : (isArabic ? 'اضغط للاختيار' : 'Tap to select'),
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? AppColors.primary : AppColors.textSecondary,
             fontFamily:
                 isArabic ? GoogleFonts.ibmPlexSansArabic().fontFamily : null,
           ),

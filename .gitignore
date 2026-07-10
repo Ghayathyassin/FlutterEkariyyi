@@ -22,6 +22,9 @@ build/
 local.properties
 *.jks
 *.keystore
+# Release signing — NEVER commit these (they contain signing secrets).
+key.properties
+/android/key.properties
 /android/app/debug
 /android/app/profile
 /android/app/release

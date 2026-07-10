@@ -8,7 +8,6 @@ import 'package:flutter_application_1/widgets/custom_card_widget_column.dart';
 import 'package:flutter_application_1/widgets/custom_card_widget_row.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_application_1/widgets/custom_app_bar.dart';
@@ -19,8 +18,6 @@ import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
 import '../widgets/register_ui.dart';
-
-const storage = FlutterSecureStorage();
 
 final ProvinceCache provinceCache = ProvinceCache();
 
