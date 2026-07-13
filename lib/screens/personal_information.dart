@@ -60,6 +60,14 @@ class PersonalInformationState extends State<PersonalInformation>
   static const String _paymentBase =
       'https://test-app.lrc.gov.lb/api/payment-session';
 
+  // Called once a payment is confirmed paid, to finalize the order: the backend
+  // re-checks the gateway, generates the receipt PDF(s), sends the receipt
+  // email, logs the outcome, and returns the transaction details (incl. the PDF
+  // as base64). NOTE: still being built by the backend team — when it goes live
+  // this starts working as-is.
+  static const String _completeUrl =
+      'https://test-app.lrc.gov.lb/api/payment-completion/complete';
+
   @override
   void initState() {
     super.initState();
@@ -140,6 +148,10 @@ class PersonalInformationState extends State<PersonalInformation>
 
         if (paid) {
           await _notifyOrderCompleted();
+          // Finalize the order on the backend (receipt PDF + email). Its
+          // message is always shown to the user; then continue to the details
+          // screen (the payment itself already succeeded).
+          await _completePayment();
           proceedPayment();
         } else if (mounted) {
           final isEnglish =
@@ -170,6 +182,121 @@ class PersonalInformationState extends State<PersonalInformation>
       if (kDebugMode) debugPrint('[retrieve] ERROR $error');
       if (mounted) setState(() => _isVerifyingOrder = false);
     }
+  }
+
+  /// Finalizes a successful payment via `POST /api/payment-completion/complete`.
+  /// Per the backend contract the response `Message` / `ExceptionMessage` is
+  /// ALWAYS shown to the user — 200 = success (also carries the receipt PDF as
+  /// base64 for future use), 500 = error with the reason (e.g. "No documents
+  /// were generated for this transaction.").
+  Future<void> _completePayment() async {
+    if (_orderId == null || _paymentMethod == null) return;
+
+    final body = jsonEncode({
+      'OrderId': _orderId,
+      'PaymentMethod': _paymentMethod,
+      'FirstName': _firstNameController.text,
+      'LastName': _lastNameController.text,
+      'Mobile': _telephoneController.text,
+      'Email': _emailController.text,
+      'Address': _addressController.text,
+      'City': _cityController.text,
+      'PropertiesCount': widget.cartCount,
+    });
+
+    if (mounted) setState(() => _isVerifyingOrder = true);
+    try {
+      final response = await http.post(
+        Uri.parse(_completeUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+
+      if (kDebugMode) {
+        debugPrint('[complete] POST $_completeUrl body=$body');
+        debugPrint(
+            '[complete] status=${response.statusCode} body=${response.body}');
+      }
+
+      if (!mounted) return;
+
+      Map<String, dynamic> decoded = {};
+      try {
+        final parsed = jsonDecode(response.body);
+        if (parsed is Map<String, dynamic>) decoded = parsed;
+      } catch (_) {}
+
+      // Prefer the detailed exception message, then the generic Message.
+      final message = (decoded['ExceptionMessage'] ??
+              decoded['Message'] ??
+              decoded['message'] ??
+              '')
+          .toString()
+          .trim();
+
+      final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+      final display = message.isNotEmpty
+          ? message
+          : (response.statusCode == 200
+              ? (isEnglish
+                  ? 'Your payment was completed successfully.'
+                  : 'تمت عملية الدفع بنجاح.')
+              : (isEnglish
+                  ? 'The order could not be finalized. Please try again later.'
+                  : 'تعذّر إتمام الطلب. يرجى المحاولة لاحقاً.'));
+
+      await _showCompletionMessage(display, success: response.statusCode == 200);
+    } catch (error) {
+      if (kDebugMode) debugPrint('[complete] ERROR $error');
+      if (mounted) {
+        final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+        await _showCompletionMessage(
+          isEnglish
+              ? 'The order could not be finalized. Please try again later.'
+              : 'تعذّر إتمام الطلب. يرجى المحاولة لاحقاً.',
+          success: false,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isVerifyingOrder = false);
+    }
+  }
+
+  /// Shows the completion message in a dialog and waits for the user to dismiss
+  /// it before continuing (so it is not covered by the next screen).
+  Future<void> _showCompletionMessage(String message,
+      {required bool success}) async {
+    if (!mounted) return;
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              success ? Icons.check_circle_outline : Icons.error_outline_rounded,
+              color: success ? AppColors.success : AppColors.danger,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                success
+                    ? (isEnglish ? 'Payment completed' : 'تم إتمام الدفع')
+                    : (isEnglish ? 'Notice' : 'تنبيه'),
+                style: AppType.h2,
+              ),
+            ),
+          ],
+        ),
+        content: Text(message, style: AppType.body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(isEnglish ? 'OK' : 'حسناً'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _notifyOrderCompleted() async {

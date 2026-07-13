@@ -64,7 +64,14 @@ The app has been fully reskinned per a Claude Design spec — concept **"The Cad
 
 The design brief/prompt handed to Claude Design also live in `design_handoff/` (`APP_DESIGN_BRIEF.md`, `DESIGN_PROMPT.md`).
 
-## Recent work & current state (updated 2026-07-08, all uncommitted in the working tree)
+## Recent work & current state (updated 2026-07-13, all uncommitted in the working tree)
+
+### Payment completion + Pending-payment retrieval (NEW, 2026-07-13) — backend endpoints still being built
+Two new payment flows wired to their **real production URLs**. The backend team has NOT finished them yet, so they currently return errors — but no code change is needed when they go live. Both **always surface the server's message to the user**.
+
+- **Payment completion** — `POST https://test-app.lrc.gov.lb/api/payment-completion/complete`, in `personal_information.dart` (`_completePayment()`). Called automatically inside `fetchOrderStatus()` right after a payment is confirmed `paid`, before `proceedPayment()`. JSON body: `{OrderId, PaymentMethod ("VISA"|"MasterCard"), FirstName, LastName, Mobile, Email, Address, City, PropertiesCount}` where `PropertiesCount` = `widget.cartCount`. Server re-checks the gateway, generates the receipt PDF(s) via Oracle/CadasterWS, emails the receipt, writes `PaymentResponseLog`, and returns the transaction details + each PDF as **base64**. Response handling: **HTTP 200 = success**, **HTTP 500 = error** (e.g. body `{"Message":"An error has occurred.","ExceptionMessage":"No documents were generated for this transaction."}`). The app shows `ExceptionMessage ?? Message` (falling back to a localized success/error line) in a **dialog** and waits for OK, then continues to `PaymentDetails` regardless (the payment itself already succeeded). **TODO when live:** the 200 payload also carries the receipt PDF as base64 + computed totals — wire up display/save.
+
+- **Pending-payment retrieval** — `GET https://test-app.lrc.gov.lb/api/PendingPayment?e_aff_id={id}&email={email}`, new screen `lib/screens/pending_payment_screen.dart` (`PendingPaymentScreen`, pushed via `MaterialPageRoute` with `onLocaleChange`). Reached from a new **"Retrieve" / "استرجاع الصحيفة"** `OutlinedButton` at the top of `title_register.dart` (left of the cart chip). Two fields: transaction number (**integer-only**, `digitsOnly`) + email (validated); Submit fires the GET. Response is **always HTTP 200** with `{ "result": N, "message": "..." }` (documented: `result` 0 = generic error, 4 = "Transaction no and e-mail do not match"). The `message` is always shown in a message box — results 0/4 render red, anything else green. Bilingual EN/AR, spinner on submit. This is for a user coming back later to check/recover a payment they started earlier.
 
 ### Account / authentication — Title Register Changes flow (NEW)
 `/titleRegisterChange` is now a **login + registration** flow (previously a dead login stub). Both auth endpoints are **POST** to `https://test-app.lrc.gov.lb/api/account/...`.
@@ -152,7 +159,7 @@ The header is unified: green `CustomAppBar` (centered logo, menu, language toggl
 
 ### Payments
 
-`createpayment` returns an order id (`e_aff_id`); `e_aff_id: 0` is not a failure but a backend signal (e.g. the property was already requested — it de-duplicates per email), and the JSON `message` should be surfaced. Then `payment-session/initiate` returns a `SessionId`, and the hosted checkout opens via `url_launcher` `inAppBrowserView` at a card-brand-specific gateway host (Visa → `creditlibanais-netcommerce.gateway.mastercard.com`, MasterCard → `ap-gateway.mastercard.com`). On app resume, `payment-session/retrieve/{method}/{orderId}` confirms payment (`respMsg == "Approved"` + a non-zero `authNumber`/`transactionAmount`). All merchant credentials live on the backend only — the app bundles no payment secrets.
+`createpayment` returns an order id (`e_aff_id`); `e_aff_id: 0` is not a failure but a backend signal (e.g. the property was already requested — it de-duplicates per email), and the JSON `message` should be surfaced. Then `payment-session/initiate` returns a `SessionId`, and the hosted checkout opens via `url_launcher` `inAppBrowserView` at a card-brand-specific gateway host (Visa → `creditlibanais-netcommerce.gateway.mastercard.com`, MasterCard → `ap-gateway.mastercard.com`). On app resume, `payment-session/retrieve/{method}/{orderId}` confirms payment (`respMsg == "Approved"` + a non-zero `authNumber`/`transactionAmount`). All merchant credentials live on the backend only — the app bundles no payment secrets. **Two newer flows (backend still building them, 2026-07-13):** once `paid` is confirmed, `POST /api/payment-completion/complete` finalizes the order (receipt PDF + email); and a "Retrieve"/"استرجاع الصحيفة" button on `title_register` opens `PendingPaymentScreen` which GETs `/api/PendingPayment?e_aff_id=&email=` to recover an earlier payment — both detailed under "Recent work".
 
 ### Conventions
 

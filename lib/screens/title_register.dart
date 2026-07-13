@@ -13,6 +13,7 @@ import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_application_1/screens/personal_information.dart';
+import 'package:flutter_application_1/screens/pending_payment_screen.dart';
 import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
@@ -598,12 +599,28 @@ class TitleRegisterState extends State<TitleRegister> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Align(
-                              alignment: AlignmentDirectional.centerEnd,
-                              child: CartChip(
-                                count: cartCount,
-                                label: isEnglish ? 'Cart' : 'السلة',
-                              ),
+                            Row(
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PendingPaymentScreen(
+                                        onLocaleChange: widget.onLocaleChange,
+                                      ),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.receipt_long_outlined,
+                                      size: 18),
+                                  label: Text(
+                                      isEnglish ? 'Retrieve' : 'استرجاع الصحيفة'),
+                                ),
+                                const Spacer(),
+                                CartChip(
+                                  count: cartCount,
+                                  label: isEnglish ? 'Cart' : 'السلة',
+                                ),
+                              ],
                             ),
                             const SizedBox(height: AppSpacing.md),
                             SectionHeader(
