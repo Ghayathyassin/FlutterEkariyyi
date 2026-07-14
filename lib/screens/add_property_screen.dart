@@ -149,6 +149,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       final pAr = loc['Name'] as String;
       final pEn = loc['NameEnglish'] as String;
       final pDisplay = isEnglish ? pEn : pAr;
+      final provinceCode = loc['Code'];
       _provinces.add(pDisplay);
       _provinceCode[pDisplay] = (loc['Code'] as num).toInt();
       _provinceAr[pDisplay] = pAr;
@@ -158,13 +159,20 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           (loc['Cazas'] as List).map<Map<String, dynamic>>((caza) {
         final cAr = caza['Name'] as String;
         final cEn = caza['NameEnglish'] as String;
+        final cazaCode = caza['Code'];
         return {
           'Name': isEnglish ? cEn : cAr,
           'NameAr': cAr,
           'NameEn': cEn,
-          'Code': caza['Code'],
-          'CadastralAreas':
-              (caza['CadastralAreas'] as List).map<Map<String, dynamic>>((area) {
+          'Code': cazaCode,
+          // The API nests areas from other province/caza pairs under each
+          // caza, so keep only the ones whose provinceCodeField +
+          // cazaCodeField match THIS province and caza.
+          'CadastralAreas': (caza['CadastralAreas'] as List)
+              .where((area) =>
+                  area['provinceCodeField'] == provinceCode &&
+                  area['cazaCodeField'] == cazaCode)
+              .map<Map<String, dynamic>>((area) {
             final aAr = area['nameField'] as String;
             final aEn = area['nameEnglishField'] as String;
             return {

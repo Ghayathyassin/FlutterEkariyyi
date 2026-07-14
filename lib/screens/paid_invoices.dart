@@ -121,6 +121,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
       final pAr = location['Name'] as String;
       final pEn = location['NameEnglish'] as String;
       final pDisplay = isEnglish ? pEn : pAr;
+      final provinceCode = location['Code'];
 
       provinces.add(pDisplay);
       provinceAr[pDisplay] = pAr;
@@ -130,13 +131,20 @@ class PaidInvoicesState extends State<PaidInvoices> {
           (location['Cazas'] as List).map<Map<String, dynamic>>((caza) {
         final cAr = caza['Name'] as String;
         final cEn = caza['NameEnglish'] as String;
+        final cazaCode = caza['Code'];
         return {
           'Name': isEnglish ? cEn : cAr,
           'NameAr': cAr,
           'NameEn': cEn,
-          'Code': caza['Code'],
+          'Code': cazaCode,
           'ProvinceCode': caza['ProviceCode'],
+          // The API nests areas from other province/caza pairs under each
+          // caza, so keep only the ones whose provinceCodeField +
+          // cazaCodeField match THIS province and caza.
           'CadastralAreas': (caza['CadastralAreas'] as List)
+              .where((area) =>
+                  area['provinceCodeField'] == provinceCode &&
+                  area['cazaCodeField'] == cazaCode)
               .map<Map<String, dynamic>>((area) {
             final aAr = area['nameField'] as String;
             final aEn = area['nameEnglishField'] as String;
@@ -515,11 +523,12 @@ class PaidInvoicesState extends State<PaidInvoices> {
       onSelected: (newValue) {
         setState(() {
           selectedProvince = newValue;
-          selectedCaza =
-              cazaOptions[selectedProvince]!.first['Name'] as String?;
-          selectedCadastralZone = cazaOptions[selectedProvince]!
-              .first['CadastralAreas']
-              .first['nameField'] as String?;
+          final firstCaza = cazaOptions[selectedProvince]!.first;
+          selectedCaza = firstCaza['Name'] as String?;
+          // A caza can filter down to zero cadastral areas, so guard .first.
+          final areas = firstCaza['CadastralAreas'] as List;
+          selectedCadastralZone =
+              areas.isNotEmpty ? areas.first['nameField'] as String? : null;
         });
       },
     );
@@ -539,10 +548,12 @@ class PaidInvoicesState extends State<PaidInvoices> {
       onSelected: (newValue) {
         setState(() {
           selectedCaza = newValue;
-          selectedCadastralZone = cazaOptions[selectedProvince!]!
-              .firstWhere((element) => element['Name'] == selectedCaza)[
-                  'CadastralAreas']
-              .first['nameField'] as String?;
+          // A caza can filter down to zero cadastral areas, so guard .first.
+          final areas = cazaOptions[selectedProvince!]!.firstWhere(
+              (element) => element['Name'] == selectedCaza)['CadastralAreas']
+              as List;
+          selectedCadastralZone =
+              areas.isNotEmpty ? areas.first['nameField'] as String? : null;
         });
       },
     );

@@ -68,6 +68,10 @@ class PersonalInformationState extends State<PersonalInformation>
   static const String _completeUrl =
       'https://test-app.lrc.gov.lb/api/payment-completion/complete';
 
+  // Native bridge used to open the receipt PDF (returned as base64 by the
+  // complete endpoint) in the device's PDF viewer via a FileProvider intent.
+  static const MethodChannel _downloadChannel = MethodChannel('lrc/downloads');
+
   @override
   void initState() {
     super.initState();
@@ -226,26 +230,54 @@ class PersonalInformationState extends State<PersonalInformation>
         if (parsed is Map<String, dynamic>) decoded = parsed;
       } catch (_) {}
 
-      // Prefer the detailed exception message, then the generic Message.
-      final message = (decoded['ExceptionMessage'] ??
-              decoded['Message'] ??
-              decoded['message'] ??
-              '')
-          .toString()
-          .trim();
-
       final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-      final display = message.isNotEmpty
-          ? message
-          : (response.statusCode == 200
-              ? (isEnglish
-                  ? 'Your payment was completed successfully.'
-                  : 'تمت عملية الدفع بنجاح.')
+
+      if (response.statusCode == 200) {
+        // Success. The payload carries the generated receipt PDF(s) under
+        // payment.Documents[].FileBase64 — show a dialog with a View button
+        // per document that opens it in the device's PDF viewer.
+        final payment = decoded['payment'] ?? decoded['Payment'];
+        // The documents normally live under payment.Documents, but tolerate a
+        // flattened top-level Documents too.
+        final rawDocs =
+            (payment is Map<String, dynamic> ? payment['Documents'] : null) ??
+                decoded['Documents'];
+        final documents = rawDocs is List
+            ? rawDocs.whereType<Map<String, dynamic>>().toList()
+            : <Map<String, dynamic>>[];
+
+        if (documents.isNotEmpty) {
+          await _showReceiptDialog(documents);
+        } else {
+          // 200 but nothing to show — fall back to the server message.
+          final message =
+              (decoded['message'] ?? decoded['Message'] ?? '').toString().trim();
+          await _showCompletionMessage(
+            message.isNotEmpty
+                ? message
+                : (isEnglish
+                    ? 'Your payment was completed successfully.'
+                    : 'تمت عملية الدفع بنجاح.'),
+            success: true,
+          );
+        }
+      } else {
+        // Error (e.g. 500) — surface the server's reason.
+        final message = (decoded['ExceptionMessage'] ??
+                decoded['Message'] ??
+                decoded['message'] ??
+                '')
+            .toString()
+            .trim();
+        await _showCompletionMessage(
+          message.isNotEmpty
+              ? message
               : (isEnglish
                   ? 'The order could not be finalized. Please try again later.'
-                  : 'تعذّر إتمام الطلب. يرجى المحاولة لاحقاً.'));
-
-      await _showCompletionMessage(display, success: response.statusCode == 200);
+                  : 'تعذّر إتمام الطلب. يرجى المحاولة لاحقاً.'),
+          success: false,
+        );
+      }
     } catch (error) {
       if (kDebugMode) debugPrint('[complete] ERROR $error');
       if (mounted) {
@@ -297,6 +329,102 @@ class PersonalInformationState extends State<PersonalInformation>
         ],
       ),
     );
+  }
+
+  /// Success dialog shown after the order is finalized: a short confirmation
+  /// plus a "View" button for each receipt PDF returned by the backend. The
+  /// buttons do not dismiss the dialog, so the user can open every document
+  /// and then close with "Done".
+  Future<void> _showReceiptDialog(List<Map<String, dynamic>> documents) async {
+    if (!mounted) return;
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppColors.success),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                isEnglish ? 'Payment completed' : 'تم إتمام الدفع',
+                style: AppType.h2,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isEnglish
+                  ? 'Your document is ready. Tap View to open it.'
+                  : 'المستند جاهز. اضغط عرض لفتحه.',
+              style: AppType.body,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            for (var i = 0; i < documents.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: AppButtons.primary(),
+                    onPressed: () {
+                      final doc = documents[i];
+                      final base64Data =
+                          (doc['FileBase64'] ?? '').toString();
+                      final fileName =
+                          (doc['FileName'] ?? 'document_${i + 1}.pdf')
+                              .toString();
+                      if (base64Data.isEmpty) return;
+                      _openDocument(base64Data, fileName);
+                    },
+                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                    label: Text(
+                      documents.length == 1
+                          ? (isEnglish ? 'View' : 'عرض')
+                          : (isEnglish
+                              ? 'View — Parcel ${documents[i]['ParcelNumber']}'
+                              : 'عرض — العقار ${documents[i]['ParcelNumber']}'),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(isEnglish ? 'Done' : 'تم'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Decodes a base64 PDF and hands it to the native side to open in the
+  /// device's PDF viewer.
+  Future<void> _openDocument(String base64Data, String fileName) async {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    try {
+      final bytes = base64Decode(base64Data.replaceAll(RegExp(r'\s'), ''));
+      await _downloadChannel.invokeMethod('openPdf', {
+        'bytes': bytes,
+        'fileName': fileName,
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('[openPdf] ERROR $e');
+      if (mounted) {
+        ErrorSnackbar.show(
+          context: context,
+          message: isEnglish
+              ? 'Could not open the document.'
+              : 'تعذّر فتح المستند.',
+        );
+      }
+    }
   }
 
   Future<void> _notifyOrderCompleted() async {
@@ -749,6 +877,34 @@ class PersonalInformationState extends State<PersonalInformation>
     super.dispose();
   }
 
+  /// Amber note telling the user to enter every field in English (official
+  /// processing needs Latin script). Same style as the register screen.
+  Widget _englishNote(bool isEnglish) {
+    final text = isEnglish
+        ? 'For official processing, please enter all the information below in English.'
+        : 'لأغراض المعالجة الرسمية، يرجى إدخال جميع المعلومات أدناه باللغة الإنجليزية.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.smd),
+      decoration: BoxDecoration(
+        color: AppColors.amberTint,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.amber.withOpacity(0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 18, color: AppColors.amberText),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(text, style: AppType.caption.copyWith(height: 1.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     var locale = Localizations.localeOf(context);
@@ -789,6 +945,8 @@ class PersonalInformationState extends State<PersonalInformation>
                           label: isEnglish ? 'Cart' : 'السلة',
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.md),
+                      _englishNote(isEnglish),
                       const SizedBox(height: AppSpacing.md),
                       SectionHeader(
                         label: isEnglish ? 'Applicant' : 'مقدّم الطلب',
