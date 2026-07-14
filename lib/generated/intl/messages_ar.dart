@@ -91,7 +91,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "enterBlockNo": MessageLookupByLibrary.simpleMessage("أدخل رقم البلوك"),
         "enterDailyRegisteredNumber":
             MessageLookupByLibrary.simpleMessage("أدخل رقم التسجيل اليومي"),
-        "enterUnitNo": MessageLookupByLibrary.simpleMessage("أدخل رقم الوحدة"),
+        "enterUnitNo": MessageLookupByLibrary.simpleMessage("أدخل رقم القسم"),
         "enterValueInL": MessageLookupByLibrary.simpleMessage(
             "أدخل القيمة بالليرة اللبنانية"),
         "enterYourAddress": MessageLookupByLibrary.simpleMessage("أدخل عنوانك"),
@@ -156,9 +156,9 @@ class MessageLookup extends MessageLookupByLibrary {
             MessageLookupByLibrary.simpleMessage("متابعة إفادة الملكية"),
         "paidInvoices":
             MessageLookupByLibrary.simpleMessage("أوامر القبض المدفوعة"),
-        "parcelNo": MessageLookupByLibrary.simpleMessage("رقم القطعة"),
+        "parcelNo": MessageLookupByLibrary.simpleMessage("رقم العقار"),
         "parcelNoIsRequired":
-            MessageLookupByLibrary.simpleMessage("رقم القطعة مطلوب"),
+            MessageLookupByLibrary.simpleMessage("رقم العقار مطلوب"),
         "part": MessageLookupByLibrary.simpleMessage(" الفريق"),
         "password": MessageLookupByLibrary.simpleMessage("كلمة السر"),
         "paymentDate": MessageLookupByLibrary.simpleMessage("تاريخ الدفع"),
@@ -260,7 +260,7 @@ class MessageLookup extends MessageLookupByLibrary {
         "transactionType": MessageLookupByLibrary.simpleMessage("نوع المعاملة"),
         "unexpectedError": MessageLookupByLibrary.simpleMessage(
             "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى"),
-        "unitNo": MessageLookupByLibrary.simpleMessage("رقم الوحدة"),
+        "unitNo": MessageLookupByLibrary.simpleMessage("رقم القسم"),
         "username": MessageLookupByLibrary.simpleMessage("إسم المستخدم"),
         "valueL":
             MessageLookupByLibrary.simpleMessage("القيمة بالليرة اللبنانية"),
