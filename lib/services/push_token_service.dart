@@ -10,9 +10,10 @@ import 'package:http/http.dart' as http;
 /// automatically via [handleRefresh], which `main` wires to
 /// `FirebaseMessaging.instance.onTokenRefresh`.
 ///
-/// NOTE: the endpoint and JSON body below are an ASSUMPTION — the backend has
-/// not defined the token‑registration contract yet. Adjust [_endpoint] and the
-/// field names once the backend confirms them.
+/// The backend counterpart is `NotificationsController.RegisterToken` in the
+/// Cadaster repo (`POST api/notifications/register-token`, body
+/// `{profileId, token, platform}`) — contract CONFIRMED 2026-07-16; a matching
+/// `unregister-token` endpoint also exists for logout.
 class PushTokenService {
   PushTokenService._();
 

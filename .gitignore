@@ -43,3 +43,5 @@ key.properties
 .vscode/
 .DS_Store
 *.log
+# Local Claude Code working notes — do not commit
+CLAUDE.md

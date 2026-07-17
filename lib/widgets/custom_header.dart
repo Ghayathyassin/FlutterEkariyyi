@@ -8,10 +8,15 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool goBack;
 
+  /// Optional action shown at the end of the title row (e.g. the
+  /// notifications bell on the login-success screen).
+  final Widget? trailing;
+
   const CustomHeader({
     super.key,
     required this.title,
     this.goBack = false,
+    this.trailing,
   });
 
   void _onBack(BuildContext context) {
@@ -60,6 +65,7 @@ class CustomHeader extends StatelessWidget implements PreferredSizeWidget {
             Expanded(
               child: Text(title, style: AppType.h2, overflow: TextOverflow.ellipsis),
             ),
+            if (trailing != null) trailing!,
             const SizedBox(width: AppSpacing.sm),
           ],
         ),

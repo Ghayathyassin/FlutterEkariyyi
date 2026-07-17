@@ -164,6 +164,26 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     }
   }
 
+  /// Opens the notifications sheet. Only available once `_serviceId` exists
+  /// (the bell is disabled until the service create succeeds).
+  void _openNotifications() {
+    final serviceId = _serviceId;
+    if (serviceId == null) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(AppRadius.banner)),
+      ),
+      builder: (_) => _NotificationsSheet(
+        profileId: widget.profileId,
+        serviceId: serviceId,
+      ),
+    );
+  }
+
   Future<void> _openAddProperty() async {
     final added = await Navigator.push<bool>(
       context,
@@ -621,7 +641,15 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CustomHeader(title: S.of(context).titleRegisterChanges),
+            CustomHeader(
+              title: S.of(context).titleRegisterChanges,
+              trailing: IconButton(
+                tooltip: isEnglish ? 'Notifications' : 'الإشعارات',
+                color: AppColors.textPrimary,
+                onPressed: _serviceId == null ? null : _openNotifications,
+                icon: const Icon(Icons.notifications_outlined, size: 24),
+              ),
+            ),
             TabBar(
               controller: _tabController,
               labelColor: AppColors.primary,
@@ -642,6 +670,217 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet listing the user's PNS notifications from
+/// `GET /api/service/notifications?profileID=..&serviceID=..`
+/// (`{"notifications": ["...", ...]}`). Fetches fresh on every open.
+class _NotificationsSheet extends StatefulWidget {
+  final int profileId;
+  final int serviceId;
+
+  const _NotificationsSheet({
+    required this.profileId,
+    required this.serviceId,
+  });
+
+  @override
+  State<_NotificationsSheet> createState() => _NotificationsSheetState();
+}
+
+class _NotificationsSheetState extends State<_NotificationsSheet> {
+  bool _loading = true;
+  bool _error = false;
+  List<String> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = false;
+      });
+    }
+    try {
+      final url =
+          Uri.parse('https://test-app.lrc.gov.lb/api/service/notifications'
+              '?profileID=${widget.profileId}&serviceID=${widget.serviceId}');
+      final response = await http.get(url);
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        final list = (decoded is Map && decoded['notifications'] is List)
+            ? decoded['notifications'] as List
+            : const [];
+        setState(() {
+          _items = [
+            for (final n in list)
+              if (n != null && n.toString().trim().isNotEmpty)
+                n.toString().trim(),
+          ];
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _error = true;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Widget _content(bool isEnglish) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl * 2),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 48, color: AppColors.neutral),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              S.of(context).dataFetchingError,
+              textAlign: TextAlign.center,
+              style: AppType.bodyMuted,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ElevatedButton.icon(
+              style: AppButtons.primary(),
+              onPressed: _fetch,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(isEnglish ? 'Retry' : 'إعادة المحاولة'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.notifications_off_outlined,
+                size: 48, color: AppColors.neutral),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              isEnglish ? 'No notifications yet.' : 'لا توجد إشعارات بعد.',
+              style: AppType.bodyMuted,
+            ),
+          ],
+        ),
+      );
+    }
+    return Flexible(
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+        itemCount: _items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (_, i) => Container(
+          padding: const EdgeInsets.all(AppSpacing.smd),
+          decoration: BoxDecoration(
+            color: AppColors.paper,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.line),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.blueTint,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: const Icon(Icons.notifications_outlined,
+                    size: 18, color: AppColors.info),
+              ),
+              const SizedBox(width: AppSpacing.smd),
+              Expanded(
+                child: Text(
+                  _items[i],
+                  style: AppType.body.copyWith(height: 1.6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.disabledStrong,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  const Icon(Icons.notifications_outlined,
+                      size: 20, color: AppColors.primary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      isEnglish ? 'Notifications' : 'الإشعارات',
+                      style: AppType.h2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.smd),
+              const Divider(height: 1),
+              const SizedBox(height: AppSpacing.smd),
+              _content(isEnglish),
+            ],
+          ),
         ),
       ),
     );

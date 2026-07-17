@@ -94,7 +94,7 @@ class MainScreenState extends State<MainScreen> {
                 'اختر لغتك',
                 textAlign: TextAlign.center,
                 textDirection: TextDirection.rtl,
-                style: GoogleFonts.ibmPlexSansArabic(
+                style: GoogleFonts.cairo(
                   fontSize: 15,
                   color: AppColors.textSecondary,
                 ),
@@ -144,7 +144,7 @@ class MainScreenState extends State<MainScreen> {
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       fontFamily: isAr
-                          ? GoogleFonts.ibmPlexSansArabic().fontFamily
+                          ? GoogleFonts.cairo().fontFamily
                           : null,
                     ),
                   ),
@@ -203,7 +203,7 @@ class _LanguageCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               color: selected ? AppColors.primary : AppColors.neutral,
               fontFamily:
-                  isArabic ? GoogleFonts.ibmPlexSansArabic().fontFamily : null,
+                  isArabic ? GoogleFonts.cairo().fontFamily : null,
             ),
           ),
         ),
@@ -215,7 +215,7 @@ class _LanguageCard extends StatelessWidget {
             fontWeight: FontWeight.w600,
             color: AppColors.textPrimary,
             fontFamily:
-                isArabic ? GoogleFonts.ibmPlexSansArabic().fontFamily : null,
+                isArabic ? GoogleFonts.cairo().fontFamily : null,
           ),
         ),
       ],

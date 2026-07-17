@@ -4,7 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 /// Central design system for the LRC app — "The Cadastral Line" redesign.
 ///
 /// Faithful to the LRC Redesign Spec: fixed brand palette (only neutrals tuned),
-/// IBM Plex type, 4dp spacing, precise radii, a hairline‑first elevation model,
+/// IBM Plex type (Cairo for Arabic), 4dp spacing, precise radii, a
+/// hairline‑first elevation model,
 /// and the survey‑linework signature (see `app_decor.dart`). Every screen pulls
 /// from these tokens — never hardcode styling.
 class AppColors {
@@ -115,10 +116,10 @@ class AppShadows {
   ];
 }
 
-/// Type scale (IBM Plex, applied via [AppTheme]). These carry size/weight/
-/// tracking/height only — the font family is set by the themed [TextTheme] and
-/// inherited through `DefaultTextStyle`, so Arabic screens get IBM Plex Sans
-/// Arabic automatically.
+/// Type scale (applied via [AppTheme]). These carry size/weight/tracking/
+/// height only — the font family is set by the themed [TextTheme] and
+/// inherited through `DefaultTextStyle`, so Arabic screens get Cairo
+/// automatically (with letter-spacing zeroed — never track Arabic).
 class AppType {
   AppType._();
 
@@ -231,8 +232,8 @@ class AppButtons {
 class AppTheme {
   AppTheme._();
 
-  /// Builds the light theme. [isArabic] swaps the base UI family to IBM Plex
-  /// Sans Arabic so the whole RTL UI is set in a first‑class Arabic face.
+  /// Builds the light theme. [isArabic] swaps the base UI family to Cairo so
+  /// the whole RTL UI is set in a first‑class Arabic face.
   static ThemeData light({bool isArabic = false}) {
     final base = ThemeData(
       useMaterial3: true,
@@ -246,22 +247,25 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.scaffold,
     );
 
-    // Map our scale onto the Material roles, then apply the IBM Plex family to
-    // every entry (Arabic face for RTL, Latin face otherwise).
+    // Map our scale onto the Material roles, then apply the UI family to
+    // every entry (Cairo for Arabic, IBM Plex Sans otherwise). Arabic strips
+    // any letter-spacing — tracking breaks Arabic's cursive joins.
+    TextStyle localized(TextStyle style) =>
+        isArabic ? style.copyWith(letterSpacing: 0) : style;
     final scaled = base.textTheme.copyWith(
-      headlineSmall: AppType.display,
-      titleLarge: AppType.h1,
-      titleMedium: AppType.title,
-      bodyLarge: AppType.body,
-      bodyMedium: AppType.body,
-      bodySmall: AppType.caption,
-      labelLarge: AppType.label,
+      headlineSmall: localized(AppType.display),
+      titleLarge: localized(AppType.h1),
+      titleMedium: localized(AppType.title),
+      bodyLarge: localized(AppType.body),
+      bodyMedium: localized(AppType.body),
+      bodySmall: localized(AppType.caption),
+      labelLarge: localized(AppType.label),
     );
     final textTheme = isArabic
-        ? GoogleFonts.ibmPlexSansArabicTextTheme(scaled)
+        ? GoogleFonts.cairoTextTheme(scaled)
         : GoogleFonts.ibmPlexSansTextTheme(scaled);
     final uiFamily = isArabic
-        ? GoogleFonts.ibmPlexSansArabic().fontFamily
+        ? GoogleFonts.cairo().fontFamily
         : GoogleFonts.ibmPlexSans().fontFamily;
 
     return base.copyWith(

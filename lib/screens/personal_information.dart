@@ -471,8 +471,8 @@ class PersonalInformationState extends State<PersonalInformation>
     return body;
   }
 
-  Map<String, String> _buildPaymentHeaders() {
-    return {
+  Map<String, String> _buildPaymentHeaders({bool skipDuplicateCheck = false}) {
+    final headers = {
       'Content-Type': 'application/json',
       'FirstName': _firstNameController.text,
       'LastName': _lastNameController.text,
@@ -481,13 +481,26 @@ class PersonalInformationState extends State<PersonalInformation>
       'city': _cityController.text,
       'addressLine1': _addressController.text,
     };
+    // Set only when the user confirms "proceed anyway" on a duplicate property,
+    // so the backend bypasses the duplicate check and creates a fresh payment.
+    if (skipDuplicateCheck) headers['SkipDuplicateCheck'] = '1';
+    return headers;
   }
 
-  void _handlePaymentResponse(Map<String, dynamic> decoded) {
+  void _handlePaymentResponse(Map<String, dynamic> decoded,
+      {bool alreadySkipped = false}) {
     final newId = decoded["e_aff_id"]?.toString();
     if (kDebugMode) {
       debugPrint('[_submitForm] e_aff_id=$newId existingOrderId=$_orderId');
       debugPrint('[_submitForm] message=${decoded['message']}');
+    }
+
+    // result_flag == 2 => one or more properties were already requested for this
+    // email. Offer to create a new payment anyway (the backend skips the
+    // duplicate check on the retry). Only prompt on the first attempt.
+    if (!alreadySkipped && decoded['result_flag']?.toString() == '2') {
+      _promptProceedAnyway();
+      return;
     }
 
     if (newId != null && newId.isNotEmpty && newId != '0') {
@@ -508,6 +521,74 @@ class PersonalInformationState extends State<PersonalInformation>
 
     // No confirmation dialog — go straight to the gateway.
     _payment();
+  }
+
+  /// Shown when the backend reports result_flag == 2 (one or more properties
+  /// already requested for this e-mail). On "Yes" we resend the payment with
+  /// SkipDuplicateCheck so the backend creates a fresh payment.
+  void _promptProceedAnyway() {
+    if (!mounted) return;
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          isEnglish ? 'Already requested' : 'سبق طلبها',
+          style: AppType.h2,
+        ),
+        content: Text(
+          isEnglish
+              ? 'One or more of these properties was already requested with this e-mail. Do you want to proceed to a new payment anyway?'
+              : 'تم طلب عقار أو أكثر من هذه العقارات مسبقاً بهذا البريد الإلكتروني. هل تريد المتابعة إلى دفعة جديدة على أي حال؟',
+          style: AppType.body,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(isEnglish ? 'No' : 'لا'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _proceedAnyway();
+            },
+            child: Text(isEnglish ? 'Yes' : 'نعم'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Resends createpayment with SkipDuplicateCheck so the backend bypasses the
+  /// duplicate check and creates a fresh payment, then continues to the gateway.
+  Future<void> _proceedAnyway() async {
+    _setSubmitting(true);
+    try {
+      final response = await _createPayment(skipDuplicateCheck: true);
+      if (response.statusCode == 200) {
+        _setSubmitting(false);
+        _handlePaymentResponse(
+          jsonDecode(response.body) as Map<String, dynamic>,
+          alreadySkipped: true,
+        );
+      } else {
+        _setSubmitting(false);
+        if (mounted) {
+          ErrorSnackbar.show(
+            context: context,
+            message: 'Payment creation failed (${response.statusCode})',
+          );
+        }
+      }
+    } catch (e) {
+      _setSubmitting(false);
+      if (mounted) {
+        ErrorSnackbar.show(
+          context: context,
+          message: S.of(context).dataFetchingError,
+        );
+      }
+    }
   }
 
   /// Extracts a user-friendly message from the `createpayment` response.
@@ -579,9 +660,9 @@ class PersonalInformationState extends State<PersonalInformation>
     }
   }
 
-  Future<http.Response> _createPayment() async {
+  Future<http.Response> _createPayment({bool skipDuplicateCheck = false}) async {
     final url = Uri.parse('https://test-app.lrc.gov.lb/api/createpayment');
-    final headers = _buildPaymentHeaders();
+    final headers = _buildPaymentHeaders(skipDuplicateCheck: skipDuplicateCheck);
     final body = _buildPaymentBody();
     final response = await http.post(url, headers: headers, body: body);
     if (kDebugMode) {
