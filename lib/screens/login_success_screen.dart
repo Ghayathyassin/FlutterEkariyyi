@@ -255,6 +255,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   List<Map<String, String>> _cardContent(Map<String, dynamic> t, bool isEn) {
     String s(dynamic v) => (v ?? '').toString().trim();
     final block = s(t['bLOCK_NOField']);
+    final unit = s(t['uNIT_NOField']);
     return [
       {
         'title': '${S.of(context).province}:',
@@ -277,7 +278,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       },
       {
         'title': '${S.of(context).unitNo}:',
-        'description': s(t['uNIT_NOField']),
+        'description': (unit.isEmpty || unit == '0') ? '—' : unit,
       },
       {
         'title': '${S.of(context).blockNo}:',
