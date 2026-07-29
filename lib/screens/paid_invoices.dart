@@ -523,12 +523,10 @@ class PaidInvoicesState extends State<PaidInvoices> {
       onSelected: (newValue) {
         setState(() {
           selectedProvince = newValue;
-          final firstCaza = cazaOptions[selectedProvince]!.first;
-          selectedCaza = firstCaza['Name'] as String?;
-          // A caza can filter down to zero cadastral areas, so guard .first.
-          final areas = firstCaza['CadastralAreas'] as List;
-          selectedCadastralZone =
-              areas.isNotEmpty ? areas.first['nameField'] as String? : null;
+          // Clear (don't auto-pick) the dependent selections — the user must
+          // choose them.
+          selectedCaza = null;
+          selectedCadastralZone = null;
         });
       },
     );
@@ -548,12 +546,8 @@ class PaidInvoicesState extends State<PaidInvoices> {
       onSelected: (newValue) {
         setState(() {
           selectedCaza = newValue;
-          // A caza can filter down to zero cadastral areas, so guard .first.
-          final areas = cazaOptions[selectedProvince!]!.firstWhere(
-              (element) => element['Name'] == selectedCaza)['CadastralAreas']
-              as List;
-          selectedCadastralZone =
-              areas.isNotEmpty ? areas.first['nameField'] as String? : null;
+          // Clear (don't auto-pick) the cadastral area.
+          selectedCadastralZone = null;
         });
       },
     );

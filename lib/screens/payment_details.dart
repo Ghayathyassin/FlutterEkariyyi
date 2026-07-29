@@ -138,9 +138,11 @@ class PaymentDetails extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
+              // "Transaction number" must match the wording on the Retrieve
+              // screen (pending_payment_screen), which asks for this same value.
               isEnglish
-                  ? 'Your request has been recorded. Keep your ID for later use.'
-                  : 'تم تسجيل طلبك. احتفظ بالمعرّف لاستخدامه لاحقًا.',
+                  ? 'Your request has been recorded. Keep the transaction number for later use.'
+                  : 'تم تسجيل طلبك. احتفظ برقم المعاملة لاستخدامه لاحقًا.',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,

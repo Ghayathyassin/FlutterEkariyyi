@@ -57,10 +57,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return p;
   }
 
-  /// Valid Lebanese mobile: 3XXXXXX (7 digits) or 70/71/76/78/79/81 + 6 digits.
+  /// Valid Lebanese number: mobile 03/70/71/76/78/79/81 + 6 digits, or a
+  /// Beirut landline 01 + 6 digits. (The leading trunk 0 is already stripped by
+  /// _normalizeLebanesePhone, so 03… arrives here as 3…, 01… as 1….)
   bool _isValidLebanesePhone(String value) {
     final p = _normalizeLebanesePhone(value);
-    return RegExp(r'^(3\d{6}|(70|71|76|78|79|81)\d{6})$').hasMatch(p);
+    return RegExp(r'^((1|3)\d{6}|(70|71|76|78|79|81)\d{6})$').hasMatch(p);
   }
 
   Future<void> _submit() async {

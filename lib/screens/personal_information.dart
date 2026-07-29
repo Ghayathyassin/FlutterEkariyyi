@@ -9,6 +9,7 @@ import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
+import 'package:flutter_application_1/widgets/receipt_dialog.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -67,10 +68,6 @@ class PersonalInformationState extends State<PersonalInformation>
   // this starts working as-is.
   static const String _completeUrl =
       'https://test-app.lrc.gov.lb/api/payment-completion/complete';
-
-  // Native bridge used to open the receipt PDF (returned as base64 by the
-  // complete endpoint) in the device's PDF viewer via a FileProvider intent.
-  static const MethodChannel _downloadChannel = MethodChannel('lrc/downloads');
 
   @override
   void initState() {
@@ -335,96 +332,10 @@ class PersonalInformationState extends State<PersonalInformation>
   /// plus a "View" button for each receipt PDF returned by the backend. The
   /// buttons do not dismiss the dialog, so the user can open every document
   /// and then close with "Done".
+  /// Shared with the Retrieve flow — see widgets/receipt_dialog.dart.
   Future<void> _showReceiptDialog(List<Map<String, dynamic>> documents) async {
     if (!mounted) return;
-    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: AppColors.success),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                isEnglish ? 'Payment completed' : 'تم إتمام الدفع',
-                style: AppType.h2,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isEnglish
-                  ? 'Your document is ready. Tap View to open it.'
-                  : 'المستند جاهز. اضغط عرض لفتحه.',
-              style: AppType.body,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            for (var i = 0; i < documents.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: AppButtons.primary(),
-                    onPressed: () {
-                      final doc = documents[i];
-                      final base64Data =
-                          (doc['FileBase64'] ?? '').toString();
-                      final fileName =
-                          (doc['FileName'] ?? 'document_${i + 1}.pdf')
-                              .toString();
-                      if (base64Data.isEmpty) return;
-                      _openDocument(base64Data, fileName);
-                    },
-                    icon: const Icon(Icons.visibility_outlined, size: 18),
-                    label: Text(
-                      documents.length == 1
-                          ? (isEnglish ? 'View' : 'عرض')
-                          : (isEnglish
-                              ? 'View — Parcel ${documents[i]['ParcelNumber']}'
-                              : 'عرض — العقار ${documents[i]['ParcelNumber']}'),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(isEnglish ? 'Done' : 'تم'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Decodes a base64 PDF and hands it to the native side to open in the
-  /// device's PDF viewer.
-  Future<void> _openDocument(String base64Data, String fileName) async {
-    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-    try {
-      final bytes = base64Decode(base64Data.replaceAll(RegExp(r'\s'), ''));
-      await _downloadChannel.invokeMethod('openPdf', {
-        'bytes': bytes,
-        'fileName': fileName,
-      });
-    } catch (e) {
-      if (kDebugMode) debugPrint('[openPdf] ERROR $e');
-      if (mounted) {
-        ErrorSnackbar.show(
-          context: context,
-          message: isEnglish
-              ? 'Could not open the document.'
-              : 'تعذّر فتح المستند.',
-        );
-      }
-    }
+    await showReceiptDialog(context, documents);
   }
 
   Future<void> _notifyOrderCompleted() async {
@@ -1096,8 +1007,10 @@ class PersonalInformationState extends State<PersonalInformation>
                                 FilteringTextInputFormatter.digitsOnly,
                               ],
                               validator: (value) {
+                                // Mobile (03/70/71/76/78/79/81) or a Beirut
+                                // landline (01), each + 6 digits.
                                 final phoneRegex =
-                                    RegExp(r'^(03|70|71|76|78|79|81)\d{6}$');
+                                    RegExp(r'^(01|03|70|71|76|78|79|81)\d{6}$');
                                 if (value == null || value.isEmpty) {
                                   return S.of(context).telephoneIsRequired;
                                 }

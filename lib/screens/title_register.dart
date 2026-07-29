@@ -416,8 +416,19 @@ class TitleRegisterState extends State<TitleRegister> {
       }
     } else {
       _log.w('[addToCart] Property invalid: ${result['message']}');
-      setState(() => validationMessage = result['message']);
+      setState(() => validationMessage = _localizedCheckPropertyMessage(result));
     }
+  }
+
+  /// checkproperty returns its message in both languages (`message` = English,
+  /// `messageArabic`). Older backend builds only send `message`, so fall back
+  /// to it rather than showing nothing.
+  String _localizedCheckPropertyMessage(Map<String, dynamic> result) {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    final english = (result['message'] ?? '').toString().trim();
+    final arabic = (result['messageArabic'] ?? '').toString().trim();
+    if (!isEnglish && arabic.isNotEmpty) return arabic;
+    return english;
   }
 
   double calculateTotalCost() {
@@ -647,14 +658,10 @@ class TitleRegisterState extends State<TitleRegister> {
                               onSelected: (newValue) {
                                 setState(() {
                                   selectedProvince = newValue;
-                                  final firstCaza =
-                                      cazaOptions[selectedProvince]!.first;
-                                  selectedCaza = firstCaza['Name'] as String?;
-                                  final areas =
-                                      firstCaza['CadastralAreas'] as List;
-                                  selectedCadastralZone = areas.isNotEmpty
-                                      ? areas.first['nameField'] as String?
-                                      : null;
+                                  // Clear (don't auto-pick) the dependent
+                                  // selections — the user must choose them.
+                                  selectedCaza = null;
+                                  selectedCadastralZone = null;
                                 });
                               },
                             ),
@@ -673,13 +680,8 @@ class TitleRegisterState extends State<TitleRegister> {
                               onSelected: (newValue) {
                                 setState(() {
                                   selectedCaza = newValue;
-                                  final areas = cazaOptions[selectedProvince!]!
-                                      .firstWhere((element) =>
-                                          element['Name'] ==
-                                          selectedCaza)['CadastralAreas'] as List;
-                                  selectedCadastralZone = areas.isNotEmpty
-                                      ? areas.first['nameField'] as String?
-                                      : null;
+                                  // Clear (don't auto-pick) the cadastral area.
+                                  selectedCadastralZone = null;
                                 });
                               },
                             ),

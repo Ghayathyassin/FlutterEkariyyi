@@ -8,18 +8,19 @@ import '../theme/app_theme.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_header.dart';
 import '../widgets/language_switch_button.dart';
+import '../widgets/receipt_dialog.dart';
 import '../widgets/register_ui.dart';
 
 /// "Retrieve / استرجاع الصحيفة" — lets a user come back later to check on /
 /// recover a payment they started earlier. They enter the transaction number
 /// (e_aff_id, integer) and the email used, and submit a GET to:
 ///   /api/PendingPayment?e_aff_id={id}&email={email}
-/// The endpoint ALWAYS returns HTTP 200 with `{ "result": N, "message": "..." }`
-/// (e.g. result 0 = generic error, result 4 = transaction/email mismatch). The
-/// `message` is always shown to the user.
-///
-/// NOTE: this endpoint is still being built by the backend team; when it goes
-/// live this screen starts working as-is (no code change needed).
+/// The endpoint ALWAYS returns HTTP 200 with
+/// `{ "result": N, "message": "...", "messageArabic": "..." }`
+/// (0 = generic error, 2 = not paid, 3 = approved/paid, 4 = transaction/email
+/// mismatch). The message is always shown to the user, in the app's language.
+/// On result 3 the response also carries `payment.Documents[]` (the title
+/// register PDFs as base64) — those are shown in the shared receipt dialog.
 class PendingPaymentScreen extends StatefulWidget {
   final Function(Locale) onLocaleChange;
   const PendingPaymentScreen({required this.onLocaleChange, super.key});
@@ -80,9 +81,17 @@ class _PendingPaymentScreenState extends State<PendingPaymentScreen> {
         if (parsed is Map<String, dynamic>) decoded = parsed;
       } catch (_) {}
 
-      final message = (decoded['message'] ?? decoded['Message'] ?? '')
-          .toString()
-          .trim();
+      // The backend returns the message in both languages (`message` = English,
+      // `messageArabic`). Older builds only send `message`, so fall back to it.
+      final englishMessage =
+          (decoded['message'] ?? decoded['Message'] ?? '').toString().trim();
+      final arabicMessage =
+          (decoded['messageArabic'] ?? decoded['MessageArabic'] ?? '')
+              .toString()
+              .trim();
+      final message = (!isEnglish && arabicMessage.isNotEmpty)
+          ? arabicMessage
+          : englishMessage;
       final result = decoded['result'] ?? decoded['Result'];
       final isKnownError = result == 0 || result == 4;
 
@@ -94,6 +103,21 @@ class _PendingPaymentScreenState extends State<PendingPaymentScreen> {
                 : 'لا توجد رسالة من الخادم.');
         _isError = isKnownError || message.isEmpty;
       });
+
+      // result 3 = "Approved; Paid" and carries the title-register PDF(s) in
+      // payment.Documents[] — show them exactly like the payment-completion
+      // flow does, instead of only the green message.
+      final documents = extractDocuments(decoded);
+      if (documents.isNotEmpty && mounted) {
+        await showReceiptDialog(
+          context,
+          documents,
+          title: isEnglish ? 'Title register ready' : 'الصحيفة العقارية جاهزة',
+          body: isEnglish
+              ? 'Your document is ready. Tap View to open it.'
+              : 'المستند جاهز. اضغط عرض لفتحه.',
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
