@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_header.dart';
 import '../widgets/language_switch_button.dart';
+import '../widgets/phone_field.dart';
 import '../widgets/register_ui.dart';
 
 /// Account registration. Six validated fields, then a POST to
@@ -36,6 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _submitting = false;
   String? _errorMessage; // red — shown on 400 / failure
   String? _successMessage; // green — shown on 200
+  Country _country = kDefaultCountry; // dial code for the phone field
 
   @override
   void dispose() {
@@ -46,23 +47,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
-  }
-
-  /// Reduces a phone entry to its Lebanese national significant number, dropping
-  /// spaces, a leading +961/00961/961 country code, and a trunk 0.
-  String _normalizeLebanesePhone(String value) {
-    var p = value.replaceAll(RegExp(r'[\s\-()]'), '');
-    p = p.replaceFirst(RegExp(r'^(\+?961|00961)'), '');
-    if (p.startsWith('0')) p = p.substring(1);
-    return p;
-  }
-
-  /// Valid Lebanese number: mobile 03/70/71/76/78/79/81 + 6 digits, or a
-  /// Beirut landline 01 + 6 digits. (The leading trunk 0 is already stripped by
-  /// _normalizeLebanesePhone, so 03… arrives here as 3…, 01… as 1….)
-  bool _isValidLebanesePhone(String value) {
-    final p = _normalizeLebanesePhone(value);
-    return RegExp(r'^((1|3)\d{6}|(70|71|76|78|79|81)\d{6})$').hasMatch(p);
   }
 
   Future<void> _submit() async {
@@ -84,7 +68,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'FullName': _fullNameController.text.trim(),
           'Username': _usernameController.text.trim(),
           'Email': _emailController.text.trim(),
-          'Phone': _phoneController.text.trim(),
+          // Full international form (+<dial><number>) so a non-Lebanese number
+          // is still reachable.
+          'Phone': composeE164(_country, _phoneController.text),
           'Password': _passwordController.text,
           'ConfirmPassword': _confirmController.text,
         }),
@@ -265,30 +251,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: AppSpacing.md),
 
           FieldLabel(isEnglish ? 'Phone' : 'رقم الهاتف'),
-          TextFormField(
+          PhoneField(
             controller: _phoneController,
-            keyboardType: TextInputType.phone,
+            country: _country,
+            onCountryChanged: (c) => setState(() => _country = c),
             textInputAction: TextInputAction.next,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
-            ],
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.phone_outlined),
-            ),
-            validator: (v) {
-              final t = (v ?? '').trim();
-              if (t.isEmpty) {
-                return isEnglish
-                    ? 'Please enter your phone number'
-                    : 'يرجى إدخال رقم الهاتف';
-              }
-              if (!_isValidLebanesePhone(t)) {
-                return isEnglish
-                    ? 'Enter a valid Lebanese number'
-                    : 'أدخل رقم هاتف لبناني صالح';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: AppSpacing.md),
 

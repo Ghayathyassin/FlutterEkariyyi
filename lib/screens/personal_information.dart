@@ -9,6 +9,7 @@ import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/custom_header.dart';
 import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_application_1/widgets/language_switch_button.dart';
+import 'package:flutter_application_1/widgets/phone_field.dart';
 import 'package:flutter_application_1/widgets/receipt_dialog.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -56,6 +57,7 @@ class PersonalInformationState extends State<PersonalInformation>
   bool _isUrlLaunched = false;
   bool _isSubmitting = false;
   bool _isVerifyingOrder = false;
+  Country _country = kDefaultCountry; // dial code for the phone field
 
 
   static const String _paymentBase =
@@ -198,7 +200,7 @@ class PersonalInformationState extends State<PersonalInformation>
       'PaymentMethod': _paymentMethod,
       'FirstName': _firstNameController.text,
       'LastName': _lastNameController.text,
-      'Mobile': _telephoneController.text,
+      'Mobile': _internationalMobile(),
       'Email': _emailController.text,
       'Address': _addressController.text,
       'City': _cityController.text,
@@ -388,7 +390,7 @@ class PersonalInformationState extends State<PersonalInformation>
       'FirstName': _firstNameController.text,
       'LastName': _lastNameController.text,
       'Email': _emailController.text,
-      'Mobile': _telephoneController.text,
+      'Mobile': _internationalMobile(),
       'city': _cityController.text,
       'addressLine1': _addressController.text,
     };
@@ -605,11 +607,10 @@ class PersonalInformationState extends State<PersonalInformation>
   }
 
 
-  String _internationalMobile() {
-    var m = _telephoneController.text.trim();
-    if (m.startsWith('0')) m = m.substring(1);
-    return '+961$m';
-  }
+  /// Full international number, using the dial code the user picked (no longer
+  /// hardcoded to Lebanon).
+  String _internationalMobile() =>
+      composeE164(_country, _telephoneController.text);
 
   Future<String?> _initiateSession() async {
     try {
@@ -847,7 +848,7 @@ class PersonalInformationState extends State<PersonalInformation>
           id: _orderId ?? 'N/A',
           name: _firstNameController.text,
           lastName: _lastNameController.text,
-          mobile: _telephoneController.text,
+          mobile: _internationalMobile(),
           email: _emailController.text,
           city: _cityController.text,
           address: _addressController.text,
@@ -995,31 +996,19 @@ class PersonalInformationState extends State<PersonalInformation>
                               ],
                             ),
                             const SizedBox(height: AppSpacing.md),
-                            TextFormField(
+                            PhoneField(
                               controller: _telephoneController,
-                              keyboardType: TextInputType.phone,
-                              decoration: InputDecoration(
-                                labelText: S.of(context).telephone,
-                                hintText: S.of(context).enterYourTelephoneNumber,
-                                prefixIcon: const Icon(Icons.phone_outlined),
-                              ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
+                              country: _country,
+                              onCountryChanged: (c) =>
+                                  setState(() => _country = c),
+                              labelText: S.of(context).telephone,
+                              hintText: S.of(context).enterYourTelephoneNumber,
                               validator: (value) {
-                                // Mobile (03/70/71/76/78/79/81) or a Beirut
-                                // landline (01), each + 6 digits.
-                                final phoneRegex =
-                                    RegExp(r'^(01|03|70|71|76|78|79|81)\d{6}$');
-                                if (value == null || value.isEmpty) {
+                                if (value == null || value.trim().isEmpty) {
                                   return S.of(context).telephoneIsRequired;
                                 }
-                                if (!phoneRegex.hasMatch(value)) {
-                                  return isEnglish
-                                      ? 'Invalid phone number'
-                                      : 'رقم هاتف غير صالح';
-                                }
-                                return null;
+                                return PhoneField.defaultValidator(
+                                    value, isEnglish);
                               },
                             ),
                             const SizedBox(height: AppSpacing.md),

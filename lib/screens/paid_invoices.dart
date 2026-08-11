@@ -257,7 +257,11 @@ class PaidInvoicesState extends State<PaidInvoices> {
       final yearOfbirth = yearOfBirthController.text.trim();
       final registerPlace = registrationPlaceController.text.trim();
       final registerNo = registrationNoController.text.trim();
-      final partyName = partyController.text.trim();
+      // A party name is free text (often containing spaces) — URL-encode it
+      // like block already is, so it doesn't break/truncate the query string.
+      final partyRaw = partyController.text.trim();
+      final partyName =
+          partyRaw.isEmpty ? '' : Uri.encodeComponent(partyRaw);
 
       final url = 'https://nirs.lrc.gov.lb/api/invctracking/getinvoice'
           '?p_province=$provinceCode'
@@ -685,7 +689,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
         }
         return null;
       },
-      keyboardType: TextInputType.number,
+      keyboardType: TextInputType.text,
     );
   }
 
