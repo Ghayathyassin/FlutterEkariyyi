@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/api.dart';
 
 class PaymentSettings {
   final double amount;
@@ -28,7 +29,7 @@ class PaymentSettings {
   double commissionFor(double base) => base * commissionPercent / 100;
 
   static const String _url =
-      'https://test-app.lrc.gov.lb/api/configuration/payment-settings';
+      '${Api.ws}/configuration/payment-settings';
 
 
   static Future<PaymentSettings> fetch() async {

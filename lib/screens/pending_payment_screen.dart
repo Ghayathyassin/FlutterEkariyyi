@@ -10,6 +10,7 @@ import '../widgets/custom_header.dart';
 import '../widgets/language_switch_button.dart';
 import '../widgets/receipt_dialog.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 /// "Retrieve / استرجاع الصحيفة" — lets a user come back later to check on /
 /// recover a payment they started earlier. They enter the transaction number
@@ -38,7 +39,7 @@ class _PendingPaymentScreenState extends State<PendingPaymentScreen> {
   String? _message; // the server's `message`, always shown after a submit
   bool _isError = true; // colours the message box (red for known errors)
 
-  static const String _baseUrl = 'https://test-app.lrc.gov.lb/api/PendingPayment';
+  static const String _baseUrl = '${Api.ws}/PendingPayment';
 
   @override
   void dispose() {

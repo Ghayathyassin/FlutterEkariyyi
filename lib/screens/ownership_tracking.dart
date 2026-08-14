@@ -15,6 +15,7 @@ import 'package:flutter_application_1/widgets/custom_app_bar.dart';
 import 'package:flutter_application_1/widgets/side_drawer.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api.dart';
 
 class OwnershipTracking extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -45,7 +46,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
 
   Future<void> fetchRequestType() async {
     try {
-      final url = Uri.parse('https://nirs.lrc.gov.lb/api/books');
+      final url = Uri.parse('${Api.lrc}/books');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -129,7 +130,7 @@ class OwnershipTrackingState extends State<OwnershipTracking> {
       final applicationDate = _dateController.text;
       final applicationNum = int.parse(_requestNoController.text);
       String url =
-          'https://nirs.lrc.gov.lb/api/nattrack?dr_id=$_selectedBookNumber&_date=$applicationDate&dr_no=$applicationNum&Dr_date=$applicationDate&PAGE_LANG=$pageLang';
+          '${Api.lrc}/nattrack?dr_id=$_selectedBookNumber&_date=$applicationDate&dr_no=$applicationNum&Dr_date=$applicationDate&PAGE_LANG=$pageLang';
 
       final response = await http.get(Uri.parse(url));
 

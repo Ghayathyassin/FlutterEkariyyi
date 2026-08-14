@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
+import '../config/api.dart';
 
 /// Sends this device's FCM push token to the backend so it can target the
 /// signed‑in user with notifications. Call [register] right after a successful
@@ -18,7 +19,7 @@ class PushTokenService {
   PushTokenService._();
 
   static const String _endpoint =
-      'https://test-app.lrc.gov.lb/api/notifications/register-token';
+      '${Api.ws}/notifications/register-token';
 
   // Remembered so a later token refresh can be re‑registered for the same user.
   static int? _profileId;

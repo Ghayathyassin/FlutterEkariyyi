@@ -7,6 +7,7 @@ import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_header.dart';
 import '../widgets/language_switch_button.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 /// Password recovery ("Forget Password"). The user enters a username and submits
 /// a POST to `/api/account/retrieve-info/{username}`. HTTP 200 means the account
@@ -55,7 +56,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _submitting = true);
     try {
       final url = Uri.parse(
-        'https://test-app.lrc.gov.lb/api/account/retrieve-info/'
+        '${Api.ws}/account/retrieve-info/'
         '${Uri.encodeComponent(username)}',
       );
       final response = await http.post(

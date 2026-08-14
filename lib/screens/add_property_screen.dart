@@ -9,6 +9,7 @@ import '../widgets/custom_header.dart';
 import '../widgets/language_switch_button.dart';
 import '../widgets/register_ui.dart';
 import '../widgets/searchable_dropdown.dart';
+import '../config/api.dart';
 
 /// Adds a property to the signed‑in user's tracked list (Title Register Changes
 /// flow). Location dropdowns are filled from `/api/locations` (province / caza /
@@ -103,7 +104,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         return;
       }
       final response = await http
-          .get(Uri.parse('https://test-app.lrc.gov.lb/api/locations'));
+          .get(Uri.parse('${Api.ws}/locations'));
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
         if (decoded is List && decoded.isNotEmpty) {
@@ -300,7 +301,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       'P_OWNER_NAME': _ownerController.text.trim(),
       'P_DEED_PRINT_DATE': _deedDateTime(),
     };
-    final uri = Uri.parse('https://test-app.lrc.gov.lb/api/service/tracks')
+    final uri = Uri.parse('${Api.ws}/service/tracks')
         .replace(queryParameters: params);
 
     setState(() => _submitting = true);

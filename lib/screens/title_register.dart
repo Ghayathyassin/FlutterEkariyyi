@@ -24,6 +24,7 @@ import '../theme/app_motion.dart';
 import '../utils/format.dart';
 import '../widgets/searchable_dropdown.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 final ProvinceCache provinceCache = ProvinceCache();
 
@@ -161,7 +162,7 @@ class TitleRegisterState extends State<TitleRegister> {
         return;
       }
 
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/locations');
+      final url = Uri.parse('${Api.ws}/locations');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -336,7 +337,7 @@ class TitleRegisterState extends State<TitleRegister> {
       _log.d('[addToCart] provinceCode=$provinceCode cazaCode=$cazaCode cadastralZoneCode=$cadastralZoneCode parcelNumber=$parcelNumber propertiesCount=$urlCart');
 
       String url =
-          'https://test-app.lrc.gov.lb/api/checkproperty?provinceCode=$provinceCode&cazaCode=$cazaCode&cadastralAreaCode=$cadastralZoneCode&parcelNumber=$parcelNumber&propertiesCount=$urlCart';
+          '${Api.ws}/checkproperty?provinceCode=$provinceCode&cazaCode=$cazaCode&cadastralAreaCode=$cadastralZoneCode&parcelNumber=$parcelNumber&propertiesCount=$urlCart';
 
       // Block is an alphanumeric code (e.g. "A", "12B") — send it as text,
       // not parsed as an int.

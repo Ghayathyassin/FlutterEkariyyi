@@ -18,6 +18,7 @@ import '../generated/l10n.dart';
 import 'dart:developer';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../config/api.dart';
 
 class TransactionTracking extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -48,7 +49,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
 
   Future<void> _fetchAreaOffices() async {
     try {
-      final url = Uri.parse('https://nirs.lrc.gov.lb/api/areaoffices');
+      final url = Uri.parse('${Api.lrc}/areaoffices');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -131,7 +132,7 @@ class TransactionTrackingState extends State<TransactionTracking> {
       final applicationNum = int.parse(_appNoController.text);
 
       final url =
-          'https://nirs.lrc.gov.lb/api/drtrack?dr_id=$_selectedAreaOfficeId&dr_no=$applicationNum&dr_date=$applicationDate&PAGE_LANG=$pageLang';
+          '${Api.lrc}/drtrack?dr_id=$_selectedAreaOfficeId&dr_no=$applicationNum&dr_date=$applicationDate&PAGE_LANG=$pageLang';
 
       final response = await http.get(Uri.parse(url));
 

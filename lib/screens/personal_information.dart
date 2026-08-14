@@ -21,6 +21,7 @@ import '../models/transaction_code.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 class PersonalInformation extends StatefulWidget {
   final int cartCount;
@@ -61,7 +62,7 @@ class PersonalInformationState extends State<PersonalInformation>
 
 
   static const String _paymentBase =
-      'https://test-app.lrc.gov.lb/api/payment-session';
+      '${Api.ws}/payment-session';
 
   // Called once a payment is confirmed paid, to finalize the order: the backend
   // re-checks the gateway, generates the receipt PDF(s), sends the receipt
@@ -69,7 +70,7 @@ class PersonalInformationState extends State<PersonalInformation>
   // as base64). NOTE: still being built by the backend team — when it goes live
   // this starts working as-is.
   static const String _completeUrl =
-      'https://test-app.lrc.gov.lb/api/payment-completion/complete';
+      '${Api.ws}/payment-completion/complete';
 
   @override
   void initState() {
@@ -574,7 +575,7 @@ class PersonalInformationState extends State<PersonalInformation>
   }
 
   Future<http.Response> _createPayment({bool skipDuplicateCheck = false}) async {
-    final url = Uri.parse('https://test-app.lrc.gov.lb/api/createpayment');
+    final url = Uri.parse('${Api.ws}/createpayment');
     final headers = _buildPaymentHeaders(skipDuplicateCheck: skipDuplicateCheck);
     final body = _buildPaymentBody();
     final response = await http.post(url, headers: headers, body: body);
@@ -650,7 +651,6 @@ class PersonalInformationState extends State<PersonalInformation>
         "lastName": _lastNameController.text,
         "email": _emailController.text,
         "mobile": _internationalMobile(),
-        // "txtHttp": "https://test-app.lrc.gov.lb/",
         "commission": commission,
         "paymentMethod": _paymentMethod,
       };

@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 class TitleRegisterChange extends StatefulWidget {
   final Function(Locale) onLocaleChange;
@@ -54,7 +55,7 @@ class _TitleRegisterChangeState extends State<TitleRegisterChange> {
     setState(() => _isLoggingIn = true);
     try {
       final url = Uri.parse(
-          'https://test-app.lrc.gov.lb/api/account/validateusercredentials');
+          '${Api.ws}/account/validateusercredentials');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

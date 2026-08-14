@@ -12,6 +12,7 @@ import '../widgets/language_switch_button.dart';
 import '../services/push_token_service.dart';
 import '../widgets/register_ui.dart';
 import 'add_property_screen.dart';
+import '../config/api.dart';
 
 /// Post‑login landing for the Title Register Changes flow. Two tabs:
 ///   * **Properties / عقارات** — the tracked-properties list (create → list →
@@ -105,7 +106,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   Future<bool> _createService() async {
     try {
       final url = Uri.parse(
-          'https://test-app.lrc.gov.lb/api/service/create?profileID=${widget.profileId}');
+          '${Api.ws}/service/create?profileID=${widget.profileId}');
       final response = await http.post(url);
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
@@ -132,7 +133,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
       });
     }
     try {
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/service/tracks'
+      final url = Uri.parse('${Api.ws}/service/tracks'
           '?profileID=${widget.profileId}&serviceID=$_serviceId');
       final response = await http.get(url);
       if (!mounted) return;
@@ -211,7 +212,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     setState(() => _loading = true);
     try {
       final url = Uri.parse(
-          'https://test-app.lrc.gov.lb/api/service/tracks/$id/delete'
+          '${Api.ws}/service/tracks/$id/delete'
           '?profileID=${widget.profileId}&serviceID=$_serviceId');
       final response = await http.post(url);
       if (!mounted) return;
@@ -385,7 +386,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
     setState(() => _savingProfile = true);
     try {
       final url =
-          Uri.parse('https://test-app.lrc.gov.lb/api/service/profile/update');
+          Uri.parse('${Api.ws}/service/profile/update');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

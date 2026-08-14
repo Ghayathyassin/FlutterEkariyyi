@@ -8,6 +8,7 @@ import '../widgets/custom_header.dart';
 import '../widgets/language_switch_button.dart';
 import '../widgets/phone_field.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 /// Account registration. Six validated fields, then a POST to
 /// `/api/account/register`. On success the screen shows the backend message and
@@ -60,7 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _submitting = true);
     try {
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/account/register');
+      final url = Uri.parse('${Api.ws}/account/register');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

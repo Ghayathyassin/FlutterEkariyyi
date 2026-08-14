@@ -14,6 +14,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
 import '../utils/format.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 /// Fee simulation. The transaction list and the fee breakdown are now served
 /// live by the backend fee-simulation API (the old VB.NET port + hardcoded
@@ -96,7 +97,7 @@ class FeesSimulationState extends State<FeesSimulation> {
         return;
       }
       final url =
-          Uri.parse('https://test-app.lrc.gov.lb/api/fee-simulation/transactions');
+          Uri.parse('${Api.ws}/fee-simulation/transactions');
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
@@ -224,7 +225,7 @@ class FeesSimulationState extends State<FeesSimulation> {
 
     final foreignFlag = _isLebanese ? 'N' : 'Y';
     final url = Uri.parse(
-        'https://test-app.lrc.gov.lb/api/fee-simulation/fee-info'
+        '${Api.ws}/fee-simulation/fee-info'
         '?transactionTypeCode=$code'
         '&appraisedValue=${_fmtValue(value)}'
         '&foreignFlag=$foreignFlag');

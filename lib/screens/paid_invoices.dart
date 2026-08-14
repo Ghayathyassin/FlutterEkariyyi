@@ -18,6 +18,7 @@ import '../generated/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
 import '../widgets/register_ui.dart';
+import '../config/api.dart';
 
 final ProvinceCache provinceCache = ProvinceCache();
 
@@ -83,7 +84,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
 
       // Same bilingual endpoint as Title Register (NOT the trailing-slash
       // variant, which returns Arabic-only data with a different shape).
-      final url = Uri.parse('https://test-app.lrc.gov.lb/api/locations');
+      final url = Uri.parse('${Api.ws}/locations');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -263,7 +264,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
       final partyName =
           partyRaw.isEmpty ? '' : Uri.encodeComponent(partyRaw);
 
-      final url = 'https://nirs.lrc.gov.lb/api/invctracking/getinvoice'
+      final url = '${Api.lrc}/invctracking/getinvoice'
           '?p_province=$provinceCode'
           '&p_caza=$cazaCode'
           '&p_cad=$cadastralZoneCode'
@@ -356,7 +357,7 @@ class PaidInvoicesState extends State<PaidInvoices> {
       });
 
       final url = Uri.parse(
-          'https://nirs.lrc.gov.lb/api/invctracking/getinvoicedetails?dr_id=$codeDetails');
+          '${Api.lrc}/invctracking/getinvoicedetails?dr_id=$codeDetails');
 
       debugPrint('========== [getInvoiceDetails] ==========');
       debugPrint('[getInvoiceDetails] dr_id=$codeDetails');
