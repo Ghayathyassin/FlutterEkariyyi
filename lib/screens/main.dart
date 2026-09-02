@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_application_1/config/features.dart';
 import 'package:flutter_application_1/models/drawer_state.dart';
 import 'package:flutter_application_1/models/payment_provider.dart';
 import 'package:flutter_application_1/screens/fee_simulation.dart';
@@ -191,9 +192,10 @@ class MyAppState extends State<MyApp> {
   // sends the target as `data: { "route": "/paidInvoices" }`; anything not in
   // this set is ignored (the app simply opens). Extend as the data contract
   // with the backend is finalized.
-  static const Set<String> _pushRoutes = {
+  static Set<String> get _pushRoutes => {
     '/index',
-    '/titleRegister',
+    // Hidden on iOS — see Features.titleRegister.
+    if (Features.titleRegister) '/titleRegister',
     '/transactionTracking',
     '/titleRegisterChange',
     '/feesSimulation',
@@ -252,12 +254,28 @@ class MyAppState extends State<MyApp> {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(isArabic: _locale.languageCode == 'ar'),
+      // Android 15 (targetSdk 35) forces edge-to-edge and makes the
+      // `statusBarColor` set below / in CustomAppBar a NO-OP, so the strip
+      // behind the status bar is no longer tinted by the system. Most screens
+      // are `SafeArea(child: Scaffold(...))`, which insets their content and
+      // leaves that strip showing the bare canvas (black). Painting the brand
+      // green here — behind every route — keeps the status-bar area on-brand on
+      // Android 15+ and changes nothing on older versions, where the system
+      // still honours statusBarColor and draws over this.
+      builder: (context, child) => ColoredBox(
+        color: AppColors.primary,
+        child: child ?? const SizedBox.shrink(),
+      ),
       routes: {
         '/index': (context) => Index(
               onLocaleChange: _setLocale,
             ),
-        '/titleRegister': (context) =>
-            TitleRegister(onLocaleChange: _setLocale),
+        // Hidden on iOS — see Features.titleRegister. Leaving it unregistered
+        // there means any stray navigation to it falls through to
+        // onUnknownRoute, which lands on Index rather than throwing.
+        if (Features.titleRegister)
+          '/titleRegister': (context) =>
+              TitleRegister(onLocaleChange: _setLocale),
         '/transactionTracking': (context) => TransactionTracking(
               onLocaleChange: _setLocale,
             ),

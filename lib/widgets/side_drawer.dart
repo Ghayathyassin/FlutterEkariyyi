@@ -2,37 +2,89 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/features.dart';
 import '../generated/l10n.dart';
 import '../models/drawer_state.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_motion.dart';
 
+/// One drawer destination.
+///
+/// [id] is the value kept in [DrawerState] and is deliberately **not** the list
+/// position: filtering a destination out (Title Register on iOS) must not shift
+/// the highlight of the ones that remain. `screens/index.dart` passes these same
+/// ids to `DrawerState.setSelectedIndex`, so the two have to agree — which is
+/// why id, icon, route and label now travel together instead of living in three
+/// index-aligned lists plus an index-based switch.
+class _Destination {
+  const _Destination({
+    required this.id,
+    required this.icon,
+    required this.route,
+    required this.label,
+  });
+
+  final int id;
+  final IconData icon;
+  final String route;
+  final String label;
+}
+
 class SideDrawer extends StatelessWidget {
   const SideDrawer({super.key});
 
   // Material Symbols set per the redesign spec.
-  static const List<IconData> drawerIcons = [
-    Icons.home_rounded,
-    Icons.menu_book_rounded,
-    Icons.fact_check_outlined,
-    Icons.calculate_rounded,
-    Icons.edit_document,
-    Icons.vpn_key_outlined,
-    Icons.receipt_long_rounded,
-  ];
+  static List<_Destination> _destinations(BuildContext context) => [
+        _Destination(
+          id: 0,
+          icon: Icons.home_rounded,
+          route: '/index',
+          label: S.of(context).homepage,
+        ),
+        // Hidden on iOS — see Features.titleRegister.
+        if (Features.titleRegister)
+          _Destination(
+            id: 1,
+            icon: Icons.menu_book_rounded,
+            route: '/titleRegister',
+            label: S.of(context).titleRegister,
+          ),
+        _Destination(
+          id: 2,
+          icon: Icons.fact_check_outlined,
+          route: '/transactionTracking',
+          label: S.of(context).transactionTracking,
+        ),
+        _Destination(
+          id: 3,
+          icon: Icons.calculate_rounded,
+          route: '/feesSimulation',
+          label: S.of(context).feesSimulation,
+        ),
+        _Destination(
+          id: 4,
+          icon: Icons.edit_document,
+          route: '/titleRegisterChange',
+          label: S.of(context).titleRegisterChanges,
+        ),
+        _Destination(
+          id: 5,
+          icon: Icons.vpn_key_outlined,
+          route: '/ownershipTracking',
+          label: S.of(context).ownershipReqTracking,
+        ),
+        _Destination(
+          id: 6,
+          icon: Icons.receipt_long_rounded,
+          route: '/paidInvoices',
+          label: S.of(context).paidInvoices,
+        ),
+      ];
 
   @override
   Widget build(BuildContext context) {
     final isEnglish = Localizations.localeOf(context).languageCode == 'en';
-    final drawerList = [
-      S.of(context).homepage,
-      S.of(context).titleRegister,
-      S.of(context).transactionTracking,
-      S.of(context).feesSimulation,
-      S.of(context).titleRegisterChanges,
-      S.of(context).ownershipReqTracking,
-      S.of(context).paidInvoices,
-    ];
+    final destinations = _destinations(context);
 
     return Drawer(
       backgroundColor: AppColors.drawerBg,
@@ -77,9 +129,12 @@ class SideDrawer extends StatelessWidget {
             child: Consumer<DrawerState>(
               builder: (context, drawerState, _) => ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: drawerList.length,
+                itemCount: destinations.length,
                 itemBuilder: (context, index) {
-                  final bool isSelected = drawerState.selectedIndex == index;
+                  final destination = destinations[index];
+                  // Highlight by stable id; stagger the reveal by position.
+                  final bool isSelected =
+                      drawerState.selectedIndex == destination.id;
                   final Color fg = isSelected
                       ? Colors.white
                       : const Color(0xffc7ccd1);
@@ -98,8 +153,8 @@ class SideDrawer extends StatelessWidget {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(AppRadius.md),
                         onTap: () {
-                          drawerState.setSelectedIndex(index);
-                          _navigateToScreen(context, index);
+                          drawerState.setSelectedIndex(destination.id);
+                          _navigateToScreen(context, destination.route);
                         },
                         child: Padding(
                           padding: const EdgeInsetsDirectional.only(
@@ -118,7 +173,7 @@ class SideDrawer extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 11),
-                              Icon(drawerIcons[index],
+                              Icon(destination.icon,
                                   color: isSelected
                                       ? AppColors.drawerSelected
                                       : fg,
@@ -126,7 +181,7 @@ class SideDrawer extends StatelessWidget {
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Text(
-                                  drawerList[index],
+                                  destination.label,
                                   style: TextStyle(
                                     color: isSelected ? Colors.white : fg,
                                     fontSize: 15,
@@ -176,35 +231,11 @@ class SideDrawer extends StatelessWidget {
     );
   }
 
-  void _navigateToScreen(BuildContext context, int index) {
+  void _navigateToScreen(BuildContext context, String route) {
     Navigator.pop(context);
 
     try {
-      switch (index) {
-        case 0:
-          Navigator.pushReplacementNamed(context, '/index');
-          break;
-        case 1:
-          Navigator.pushReplacementNamed(context, '/titleRegister');
-          break;
-        case 2:
-          Navigator.pushReplacementNamed(context, '/transactionTracking');
-          break;
-        case 3:
-          Navigator.pushReplacementNamed(context, '/feesSimulation');
-          break;
-        case 4:
-          Navigator.pushReplacementNamed(context, '/titleRegisterChange');
-          break;
-        case 5:
-          Navigator.pushReplacementNamed(context, '/ownershipTracking');
-          break;
-        case 6:
-          Navigator.pushReplacementNamed(context, '/paidInvoices');
-          break;
-        default:
-          break;
-      }
+      Navigator.pushReplacementNamed(context, route);
     } catch (e, stackTrace) {
       if (kDebugMode) {
         log('Navigation error: $e');

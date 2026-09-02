@@ -52,5 +52,13 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Required for FCM to deliver pushes while the app is backgrounded or
+	     terminated. Android gets this for free; iOS does not. Note this alone is
+	     not enough — an APNs key must also be uploaded to the Firebase project,
+	     and Push Notifications + Background Modes enabled in Xcode. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

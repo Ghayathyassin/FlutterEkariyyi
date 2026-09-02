@@ -1,0 +1,72 @@
+# Builds the app for the iOS SIMULATOR on a macOS runner.
+#
+# Why this exists: development happens on Windows, where there is no iOS
+# toolchain, so ios/Runner/AppDelegate.swift (the `openPdf` PDF-viewer channel)
+# cannot be compiled or tested locally. This workflow is the cheap way to catch
+# Swift/Xcode errors, and it produces a .app you can drag into Appetize.io to
+# actually click through the app in a browser from Windows.
+#
+# Simulator builds need NO code signing — no Apple Developer account, no
+# certificates, no provisioning profiles. (A real-device or App Store build
+# does, and is not what this workflow is for.)
+#
+# It does NOT touch Android in any way.
+#
+# Run it: Actions tab -> "iOS Simulator Build" -> Run workflow. Then download
+# the "ios-simulator-app" artifact, unzip, and upload Runner.app to appetize.io.
+#
+# Not testable this way: push notifications (needs a real device + an APNs key).
+
+name: iOS Simulator Build
+
+on:
+  workflow_dispatch: # manual trigger — the normal way to use this
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - ".github/workflows/ios-simulator.yml"
+
+jobs:
+  build:
+    name: Build (no signing)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Match the version used locally so CI reproduces local behaviour.
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      # NOTE: the app's entry point is lib/screens/main.dart, NOT lib/main.dart.
+      - name: Build for iOS simulator
+        run: flutter build ios --simulator --debug -t lib/screens/main.dart
+
+      - name: Zip the .app for Appetize
+        run: |
+          cd build/ios/iphonesimulator
+          zip -r -y Runner-simulator.zip Runner.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: build/ios/iphonesimulator/Runner-simulator.zip
+          retention-days: 14

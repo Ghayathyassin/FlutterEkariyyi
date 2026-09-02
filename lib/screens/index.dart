@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/features.dart';
 import '../models/drawer_state.dart';
 import 'package:flutter_application_1/widgets/category.dart';
 import 'package:flutter_application_1/widgets/custom_app_bar.dart';
@@ -32,13 +33,15 @@ class Index extends StatelessWidget {
     final int crossAxisCount = wide ? 3 : 2;
 
     final categories = <Widget>[
-      Category(
-        function: () => _navigateTo(context, 1, '/titleRegister'),
-        title: S.of(context).titleRegister,
-        description: isEnglish ? 'Request property records' : 'طلب بيانات عقارية',
-        icon: Icons.menu_book_rounded,
-        accent: AppColors.primary,
-      ),
+      // iOS: the Title Register purchase flow is hidden (Features.titleRegister).
+      if (Features.titleRegister)
+        Category(
+          function: () => _navigateTo(context, 1, '/titleRegister'),
+          title: S.of(context).titleRegister,
+          description: isEnglish ? 'Request property records' : 'طلب بيانات عقارية',
+          icon: Icons.menu_book_rounded,
+          accent: AppColors.primary,
+        ),
       Category(
         function: () => _navigateTo(context, 2, '/transactionTracking'),
         title: S.of(context).transactionTracking,
