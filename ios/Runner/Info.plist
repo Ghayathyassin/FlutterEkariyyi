@@ -52,6 +52,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Answers Apple's Export Compliance question at upload time instead of
+	     needing it re-answered manually on every TestFlight build. Correct
+	     because the app only makes standard HTTPS calls (see CLAUDE.md: all
+	     REST traffic, ATS default-on) — no custom/proprietary encryption. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Required for FCM to deliver pushes while the app is backgrounded or
 	     terminated. Android gets this for free; iOS does not. Note this alone is
 	     not enough — an APNs key must also be uploaded to the Firebase project,
