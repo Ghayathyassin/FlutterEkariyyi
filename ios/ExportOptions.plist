@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Consumed by `flutter build ipa --export-options-plist=ios/ExportOptions.plist`
+  (see .github/workflows/ios-testflight.yml). Nothing here is secret — the
+  actual signing material (certificate + provisioning profile) is injected at
+  build time from GitHub Actions secrets, not from this file.
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store</string>
+	<key>teamID</key>
+	<string>U6AALXVF3J</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>lb.gov.lrc.ekariyyi</key>
+		<string>LRC Ekariyyi App Store</string>
+	</dict>
+</dict>
+</plist>

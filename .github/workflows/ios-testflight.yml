@@ -1,0 +1,106 @@
+# Builds a SIGNED release IPA and uploads it to TestFlight.
+#
+# This is the "real" iOS pipeline: unlike ios-simulator.yml (which builds an
+# unsigned .app for Appetize.io, no Apple account needed), this one produces
+# something installable on an actual iPhone — which is required to test push
+# notifications at all (they never fire in a simulator).
+#
+# Runs entirely on GitHub's free macOS runner. No Mac hardware is owned or
+# rented for this — the signing identity (certificate + provisioning profile)
+# and the App Store Connect API key all live as encrypted repo secrets and are
+# injected at build time. See CLAUDE.md / the ios_signing session notes for how
+# those were generated (OpenSSL CSR -> Apple-issued certificate -> .p12; App
+# Store Connect -> API key).
+#
+# PREREQUISITE (one-time, manual, in App Store Connect): an app record for
+# bundle ID lb.gov.lrc.ekariyyi must exist under Apps before the first upload
+# will succeed — the API rejects uploads for a bundle ID with no app record.
+#
+# Manual trigger only (workflow_dispatch), not on every push: each successful
+# run uploads a new build to TestFlight, which isn't something to do on every
+# commit. Run it deliberately from the Actions tab when there's something
+# worth testing on a real device.
+
+name: iOS TestFlight Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    name: Build (signed) and upload to TestFlight
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Match the version used locally / in ios-simulator.yml.
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Standard CI signing pattern: create a throwaway keychain scoped to this
+      # runner, import the distribution certificate into it, and make it the
+      # active keychain so `xcodebuild` (invoked by `flutter build ipa`) can
+      # find the signing identity. The runner VM is destroyed after the job, so
+      # nothing here needs explicit cleanup.
+      - name: Import signing certificate
+        env:
+          P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          P12_PATH="$RUNNER_TEMP/certificate.p12"
+
+          echo -n "$P12_BASE64" | base64 --decode > "$P12_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$P12_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo -n "$PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+      # --build-number is set to the GitHub run number rather than the
+      # pubspec.yaml value, because TestFlight rejects a build whose version
+      # isn't strictly higher than the last upload — this guarantees every run
+      # is unique without hand-bumping pubspec.yaml before each test upload.
+      # NOTE: the app's entry point is lib/screens/main.dart, NOT lib/main.dart.
+      - name: Build signed IPA
+        run: |
+          flutter build ipa --release \
+            -t lib/screens/main.dart \
+            --build-number=${{ github.run_number }} \
+            --export-options-plist=ios/ExportOptions.plist
+
+      - name: Locate IPA
+        id: ipa
+        run: |
+          IPA_PATH=$(find build/ios/ipa -maxdepth 1 -name '*.ipa' | head -n1)
+          echo "Found: $IPA_PATH"
+          echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v1
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
