@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Required for push at all: manual signing (see project.pbxproj, Release
+	  config) does not auto-derive the push capability from the provisioning
+	  profile the way Xcode's automatic signing does — without this, the app's
+	  signature carries no aps-environment entitlement and APNs will not trust
+	  its device tokens, even though the provisioning profile itself already
+	  declares aps-environment=production.
+
+	  "production" matches the App Store Connect distribution profile
+	  (LRC_Ekariyyi_App_Store.mobileprovision) used for TestFlight/App Store
+	  builds. A local Xcode debug build against a development profile would
+	  need "development" instead — not relevant here since this repo only
+	  ever builds Release via CI.
+	-->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>
