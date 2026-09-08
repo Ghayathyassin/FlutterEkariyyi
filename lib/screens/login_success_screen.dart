@@ -58,6 +58,7 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
   bool _obscurePw = true;
   bool _obscureConfirm = true;
   bool _savingProfile = false;
+  bool _deletingAccount = false;
   String? _profileError;
   String? _profileSuccess;
 
@@ -565,11 +566,193 @@ class _LoginSuccessScreenState extends State<LoginSuccessScreen>
                     )
                   : Text(isEnglish ? 'Save' : 'حفظ'),
             ),
+            const SizedBox(height: AppSpacing.xl),
+
+            // Account deletion. Both the App Store and Google Play require an
+            // in-app deletion path for any app that allows sign-up, so this is a
+            // store requirement, not just a nicety. Kept visually separate and
+            // below Save so it can't be hit by accident.
+            const Divider(color: AppColors.border),
+            const SizedBox(height: AppSpacing.md),
+            SectionHeader(
+              label: isEnglish ? 'Delete Account' : 'حذف الحساب',
+              icon: Icons.warning_amber_rounded,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              isEnglish
+                  ? 'Deleting your account removes your login and your tracked '
+                      'properties permanently. Records of completed payments are '
+                      'kept, as required by law. This cannot be undone.'
+                  : 'حذف حسابك يؤدي إلى إزالة بيانات الدخول والعقارات المتابَعة '
+                      'نهائياً. تُحفظ سجلات الدفعات المنجزة وفقاً للأنظمة '
+                      'القانونية. لا يمكن التراجع عن هذه العملية.',
+              style: AppType.caption.copyWith(height: 1.6),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _deletingAccount ? null : _confirmAndDeleteAccount,
+              icon: _deletingAccount
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.danger),
+                    )
+                  : const Icon(Icons.delete_forever_outlined, size: 18),
+              label: Text(isEnglish ? 'Delete My Account' : 'حذف حسابي'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.danger,
+                side: BorderSide(color: AppColors.danger.withOpacity(0.5)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
             const SizedBox(height: AppSpacing.lg),
           ],
         ),
       ),
     );
+  }
+
+  /// Confirm (with a password re-check) then delete the account.
+  ///
+  /// The password is asked for again because the API requires it — the REST
+  /// layer has no auth of its own, so `api/account/delete` re-validates
+  /// credentials server-side before deleting anything. It also makes an
+  /// irreversible action deliberate rather than one tap away.
+  Future<void> _confirmAndDeleteAccount() async {
+    final isEnglish = Localizations.localeOf(context).languageCode == 'en';
+    final passwordController = TextEditingController();
+    bool obscure = true;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(isEnglish ? 'Delete account?' : 'حذف الحساب؟'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isEnglish
+                    ? 'This permanently deletes your login and tracked '
+                        'properties. Enter your password to confirm.'
+                    : 'سيتم حذف بيانات الدخول والعقارات المتابَعة نهائياً. '
+                        'أدخل كلمة المرور للتأكيد.',
+                style: AppType.caption.copyWith(height: 1.6),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: passwordController,
+                obscureText: obscure,
+                autofocus: true,
+                textDirection: TextDirection.ltr,
+                textAlign: isEnglish ? TextAlign.left : TextAlign.right,
+                decoration: InputDecoration(
+                  labelText: isEnglish ? 'Password' : 'كلمة المرور',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    onPressed: () => setLocal(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(isEnglish ? 'Cancel' : 'إلغاء'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(isEnglish ? 'Delete' : 'حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final password = passwordController.text;
+    passwordController.dispose();
+
+    if (confirmed != true || !mounted) return;
+    if (password.isEmpty) {
+      ErrorSnackbar.show(
+        context: context,
+        message: isEnglish
+            ? 'Please enter your password.'
+            : 'يرجى إدخال كلمة المرور.',
+      );
+      return;
+    }
+
+    setState(() => _deletingAccount = true);
+    // Captured before navigating: MaterialApp's messenger outlives this route,
+    // so the confirmation can still be shown after the stack is replaced.
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final response = await http.post(
+        Uri.parse('${Api.ws}/account/delete'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'Username': widget.username,
+          'Password': password,
+        }),
+      );
+
+      Map<String, dynamic>? decoded;
+      try {
+        decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        decoded = null;
+      }
+
+      // The endpoint answers 200 with `deleted: false` for a bad password
+      // (matching the shape the rest of the account API returns), so the flag
+      // is what matters here, not the status code alone.
+      final deleted =
+          response.statusCode == 200 && decoded?['deleted'] == true;
+
+      if (!mounted) return;
+
+      if (deleted) {
+        PushTokenService.clear();
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/index', (route) => false);
+        messenger.showSnackBar(SnackBar(
+          content: Text(isEnglish
+              ? 'Your account has been deleted.'
+              : 'تم حذف حسابك.'),
+        ));
+        return;
+      }
+
+      setState(() => _deletingAccount = false);
+      ErrorSnackbar.show(
+        context: context,
+        message: decoded?['Message']?.toString() ??
+            (isEnglish
+                ? 'Could not delete the account. Please try again.'
+                : 'لم نتمكن من حذف الحساب. يرجى المحاولة مرة أخرى.'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _deletingAccount = false);
+      ErrorSnackbar.show(
+        context: context,
+        message: S.of(context).dataFetchingError,
+      );
+    }
   }
 
   Widget _profileMessageBox(String text, {required bool isError}) {
