@@ -16,7 +16,6 @@ import 'package:flutter_application_1/screens/paid_invoices.dart';
 import 'package:flutter_application_1/screens/title_register_change.dart';
 import 'package:flutter_application_1/screens/title_register.dart';
 import 'package:flutter_application_1/screens/transaction_tracking.dart';
-import 'package:flutter_application_1/widgets/error_snackbar.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -217,12 +216,12 @@ class MyAppState extends State<MyApp> {
       await FirebaseMessaging.instance.getToken();
       if (kDebugMode) log('FCM token acquired');
     } catch (e) {
-      if (mounted) {
-        ErrorSnackbar.show(
-          context: context,
-          message: S.of(context).unexpectedError,
-        );
-      }
+      // Log only. This State sits above MaterialApp, so its context has no
+      // Localizations or ScaffoldMessenger: S.of(context) here threw instead
+      // of showing anything. A failure at startup is also harmless: iOS often
+      // has no APNs token yet on first launch, and PushTokenService.register
+      // fetches the token again at login.
+      log('FCM token not available at startup: $e');
     }
   }
 
