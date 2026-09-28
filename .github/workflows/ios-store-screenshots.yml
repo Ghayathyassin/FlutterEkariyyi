@@ -1,0 +1,132 @@
+# Produces App Store screenshots on iOS simulators — no iPhone or iPad needed.
+#
+# Runs integration_test/store_screenshots_test.dart on a large iPhone and a
+# 13-inch iPad simulator. At each screen the test prints `STORE_SHOT:<name>`;
+# this workflow watches for the marker and captures the simulator display with
+# `xcrun simctl io screenshot`, so every image is at the device's native size
+# (with a clean 9:41 status bar).
+#
+# Output (artifact "store-screenshots"):
+#   iphone-6.9/  native Pro Max size (1320x2868) - App Store "iPhone 6.9"
+#   iphone-6.5/  resized to 1284x2778            - App Store "iPhone 6.5"
+#   ipad-13/     native 13-inch iPad (2064x2752) - App Store "iPad 13"
+#
+# Run it: Actions tab -> "iOS Store Screenshots" -> Run workflow.
+# No signing or secrets involved; it does not touch Android.
+
+name: iOS Store Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      lang:
+        description: "App language for the screenshots (ar or en)"
+        required: true
+        default: "ar"
+
+jobs:
+  screenshots:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      SHOT_LANG: ${{ github.event.inputs.lang }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Pick simulators
+        id: sims
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, subprocess
+          data = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          devs = []
+          for runtime, ds in data["devices"].items():
+              if "iOS" in runtime:
+                  devs += [(runtime, d) for d in ds]
+          devs.sort(key=lambda x: x[0])  # newest runtime last
+          def pick(pred):
+              hits = [d for _, d in devs if pred(d["name"])]
+              return hits[-1] if hits else None
+          iphone = pick(lambda n: n.startswith("iPhone") and "Pro Max" in n)
+          ipad = pick(lambda n: n.startswith("iPad Pro") and "13" in n)
+          print("iphone=" + (iphone["udid"] if iphone else ""))
+          print("iphone_name=" + (iphone["name"] if iphone else ""))
+          print("ipad=" + (ipad["udid"] if ipad else ""))
+          print("ipad_name=" + (ipad["name"] if ipad else ""))
+          PY
+          cat "$GITHUB_OUTPUT"
+
+      - name: Capture screenshots
+        env:
+          IPHONE: ${{ steps.sims.outputs.iphone }}
+          IPAD: ${{ steps.sims.outputs.ipad }}
+        run: |
+          set -u
+          capture() {
+            local udid="$1" out="$2"
+            mkdir -p "$out"
+            xcrun simctl boot "$udid" || true
+            xcrun simctl bootstatus "$udid" -b
+            xcrun simctl status_bar "$udid" override --time "9:41" \
+              --dataNetwork wifi --wifiMode active --wifiBars 3 \
+              --cellularMode active --cellularBars 4 \
+              --batteryState charged --batteryLevel 100
+            local log="$out/run.log" taken=" "
+            flutter test integration_test/store_screenshots_test.dart \
+              -d "$udid" --dart-define=SHOT_LANG="$SHOT_LANG" > "$log" 2>&1 &
+            local pid=$!
+            while kill -0 "$pid" 2>/dev/null; do
+              for name in $(grep -o 'STORE_SHOT:[A-Za-z0-9_]*' "$log" | cut -d: -f2); do
+                case "$taken" in
+                  *" $name "*) ;;
+                  *) xcrun simctl io "$udid" screenshot "$out/$name.png"
+                     taken="$taken$name " ;;
+                esac
+              done
+              sleep 1
+            done
+            local rc=0
+            wait "$pid" || rc=$?
+            echo "---- last lines of $log ----"; tail -40 "$log"
+            xcrun simctl shutdown "$udid" || true
+            return $rc
+          }
+          status=0
+          capture "$IPHONE" shots/iphone-6.9 || status=1
+          capture "$IPAD" shots/ipad-13 || status=1
+          exit $status
+
+      - name: Make 6.5-inch iPhone versions
+        if: always()
+        run: |
+          mkdir -p shots/iphone-6.5
+          for f in shots/iphone-6.9/*.png; do
+            [ -e "$f" ] || continue
+            o="shots/iphone-6.5/$(basename "$f")"
+            sips --resampleWidth 1284 "$f" --out "$o" > /dev/null
+            sips --cropToHeightWidth 2778 1284 "$o" > /dev/null
+          done
+          for f in shots/*/*.png; do
+            echo "$f $(sips -g pixelWidth -g pixelHeight "$f" | awk '/pixel/{printf "%s ", $2}')"
+          done
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-screenshots
+          path: shots/
+          retention-days: 14
