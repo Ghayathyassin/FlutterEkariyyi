@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>lb.gov.lrc.ekariyyi</string>
+	<string>com.haceb.lrc</string>
 	<key>PROJECT_ID</key>
 	<string>lrc-lebanon</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:469320132586:ios:7ea8e032bec4410e557493</string>
+	<string>1:469320132586:ios:38d73919751abba2557493</string>
 </dict>
 </plist>

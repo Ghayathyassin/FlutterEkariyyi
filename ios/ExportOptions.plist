@@ -18,8 +18,8 @@
 	<true/>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>lb.gov.lrc.ekariyyi</key>
-		<string>LRC Ekariyyi App Store</string>
+		<key>com.haceb.lrc</key>
+		<string>LRC Existing App Store</string>
 	</dict>
 </dict>
 </plist>
