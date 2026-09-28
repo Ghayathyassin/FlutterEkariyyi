@@ -1,16 +1,23 @@
 // Drives the app through the screens shown on the App Store listing.
 //
 // Run by .github/workflows/ios-store-screenshots.yml on iOS simulators. The
-// test does not capture anything itself: at each screen it prints a
-// `STORE_SHOT:<name>` marker and holds still while the workflow grabs the
-// simulator screen with `xcrun simctl io screenshot`, which gives the exact
+// test does not capture anything itself: at each screen it writes an empty
+// `STORE_SHOT_<name>` file into the app's tmp directory and holds still while
+// the workflow (which polls that directory in the simulator's app container)
+// grabs the screen with `xcrun simctl io screenshot`, which gives the exact
 // pixel sizes App Store Connect asks for (status bar included).
+//
+// A file rather than print(): `flutter test` on a device only flushes the
+// test's stdout when the run ends, so printed markers arrived after the app
+// had already closed.
 //
 // It mirrors main() in lib/screens/main.dart minus the permission prompts
 // (requestPermission / NotificationService.init), which would otherwise put a
 // system dialog on top of every screenshot.
 //
 // Language: --dart-define=SHOT_LANG=ar|en (default ar).
+
+import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -28,8 +35,8 @@ const _lang = String.fromEnvironment('SHOT_LANG', defaultValue: 'ar');
 /// long enough for the screenshot to be taken.
 Future<void> _shot(WidgetTester tester, String name) async {
   await _settle(tester, const Duration(seconds: 4));
-  // ignore: avoid_print
-  print('STORE_SHOT:$name');
+  // On iOS, systemTemp is the tmp/ folder inside the app's data container.
+  File('${Directory.systemTemp.path}/STORE_SHOT_$name').writeAsStringSync('');
   await _settle(tester, const Duration(seconds: 6));
 }
 
@@ -81,7 +88,5 @@ void main() {
     await _open(tester, '/titleRegisterChange', '5_title_register_changes');
     await _open(tester, '/ownershipTracking', '6_ownership_tracking');
 
-    // ignore: avoid_print
-    print('STORE_SHOT_DONE');
   });
 }

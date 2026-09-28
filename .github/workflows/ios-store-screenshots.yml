@@ -1,8 +1,9 @@
 # Produces App Store screenshots on iOS simulators — no iPhone or iPad needed.
 #
 # Runs integration_test/store_screenshots_test.dart on a large iPhone and a
-# 13-inch iPad simulator. At each screen the test prints `STORE_SHOT:<name>`;
-# this workflow watches for the marker and captures the simulator display with
+# 13-inch iPad simulator. At each screen the test writes a STORE_SHOT_<name>
+# file into the app's tmp/ folder; this workflow polls the simulator's app
+# container for it and captures the simulator display with
 # `xcrun simctl io screenshot`, so every image is at the device's native size
 # (with a clean 9:41 status bar).
 #
@@ -88,14 +89,23 @@ jobs:
             flutter test integration_test/store_screenshots_test.dart \
               -d "$udid" --dart-define=SHOT_LANG="$SHOT_LANG" > "$log" 2>&1 &
             local pid=$!
+            # The test drops an empty STORE_SHOT_<name> file into the app's
+            # tmp/ folder at each screen (see store_screenshots_test.dart).
             while kill -0 "$pid" 2>/dev/null; do
-              for name in $(grep -o 'STORE_SHOT:[A-Za-z0-9_]*' "$log" | cut -d: -f2); do
-                case "$taken" in
-                  *" $name "*) ;;
-                  *) xcrun simctl io "$udid" screenshot "$out/$name.png"
-                     taken="$taken$name " ;;
-                esac
-              done
+              local data
+              data=$(xcrun simctl get_app_container "$udid" com.haceb.lrc data 2>/dev/null || true)
+              if [ -n "$data" ]; then
+                for f in "$data"/tmp/STORE_SHOT_*; do
+                  [ -e "$f" ] || continue
+                  local name="${f##*/STORE_SHOT_}"
+                  case "$taken" in
+                    *" $name "*) ;;
+                    *) xcrun simctl io "$udid" screenshot "$out/$name.png"
+                       echo "captured $name"
+                       taken="$taken$name " ;;
+                  esac
+                done
+              fi
               sleep 1
             done
             local rc=0
