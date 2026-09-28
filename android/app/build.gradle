@@ -39,10 +39,11 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.example.flutter_application_1"
-    // Pinned to 35 (Android 15) rather than flutter.compileSdkVersion, which on
+    // Pinned to 36 (Android 16) rather than flutter.compileSdkVersion, which on
     // Flutter 3.24 still resolves to 34 — below the level Google Play accepts
-    // for new uploads. Revisit when the Flutter SDK is upgraded.
-    compileSdk = 35
+    // for new uploads (API 36 enforced from 2026-08-31). Revisit when the
+    // Flutter SDK is upgraded.
+    compileSdk = 36
     // Pinned: several plugins (flutter_local_notifications, path_provider,
     // shared_preferences, sqflite, url_launcher, integration_test) require
     // 26.1.10909125, which is higher than flutter.ndkVersion on Flutter 3.24.
@@ -66,10 +67,10 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdk = flutter.minSdkVersion
-        // Pinned to 35 for the same reason as compileSdk above. NOTE: targeting
-        // 35 makes Android 15 force edge-to-edge and ignore statusBarColor, so
+        // Pinned to 36 for the same reason as compileSdk above. NOTE: targeting
+        // 35+ makes Android force edge-to-edge and ignore statusBarColor, so
         // the status-bar tint is painted by the app itself (see CustomAppBar).
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
     }
